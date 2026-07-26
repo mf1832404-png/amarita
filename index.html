@@ -243,9 +243,15 @@
     display:flex; flex-direction:column;
   }
   .product-media{
+    position:relative;
     height:120px; display:flex; align-items:center; justify-content:center;
-    font-size:2.6rem;
+    font-size:2.6rem; overflow:hidden;
     background:color-mix(in srgb, var(--cat-color) 20%, white);
+  }
+  .remove-badge{
+    position:absolute; top:6px; right:6px; z-index:2;
+    background:var(--blanc); border:none; border-radius:var(--radius-circle);
+    width:28px; height:28px; font-size:.95rem; box-shadow:var(--shadow);
   }
   .product-body{padding:16px; display:flex; flex-direction:column; gap:10px; flex:1;}
   .product-body h4{margin:0; font-size:1rem; font-family:'Work Sans'; font-weight:600;}
@@ -322,6 +328,7 @@
   .drawer-item .di-icon{
     width:44px; height:44px; border-radius:var(--radius-sm); background:var(--sable);
     display:flex; align-items:center; justify-content:center; font-size:1.4rem; flex-shrink:0;
+    overflow:hidden;
   }
   .drawer-item .di-name{font-size:.9rem; font-weight:600; margin-bottom:2px;}
   .drawer-item .di-price{font-family:'Space Mono'; font-size:.8rem; color:#5a6a70;}
@@ -525,20 +532,8 @@ const CATEGORIES = [
   {key:"artisanat", label:"Artisanat & Maison", icon:"🧺", color:"var(--mangue)", blurb:"Pièces tissées, tressées et faites main."},
 ];
 
-// Les produits ne sont plus écrits en dur ici : ils viennent maintenant de
-// votre backend (amarita-backend.js), ajoutés par vous ou par vos vendeurs
-// via le bouton "🏪 Vendeur". Cette petite liste ne sert que de secours si
-// amarita-backend.js n'est pas encore déployé, pour que la vitrine ne soit
-// jamais complètement vide pendant les réglages.
-const DEMO_PRODUCTS = [
-  {id:"demo1", cat:"mode", name:"Boubou brodé homme", price:28000, icon:"👘"},
-  {id:"demo2", cat:"beaute", name:"Beurre de karité pur", price:3500, icon:"🧴"},
-  {id:"demo3", cat:"epicerie", name:"Thé Touba artisanal", price:1800, icon:"🍵"},
-  {id:"demo4", cat:"artisanat", name:"Panier en osier tressé", price:6500, icon:"🧺"},
-];
-
 let PRODUCTS = []; // rempli par fetchProducts() au chargement de la page
-let session = null; // { token, name } — compte vendeur connecté
+let session = null; // { token, name, id } — compte vendeur connecté
 let cart = []; // {id, qty}
 
 function formatFCFA(n){
@@ -558,6 +553,12 @@ function renderCategories(){
   `).join('');
 }
 
+function productMedia(p){
+  return p.image
+    ? `<img src="${p.image}" alt="${p.name}" style="width:100%; height:100%; object-fit:cover;">`
+    : p.icon;
+}
+
 function renderProducts(){
   const container = document.getElementById('products-container');
   container.innerHTML = CATEGORIES.map(c => {
@@ -574,7 +575,12 @@ function renderProducts(){
         <div class="products-grid">
           ${items.map(p => `
             <div class="product-card" style="--cat-color:${c.color}" data-name="${p.name.toLowerCase()}">
-              <div class="product-media">${p.icon}</div>
+              <div class="product-media">
+                ${productMedia(p)}
+                ${session && session.id === p.sellerId ? `
+                  <button class="remove-badge" onclick="deleteMyProduct('${p.id}')" aria-label="Retirer ce produit">🗑️</button>
+                ` : ''}
+              </div>
               <div class="product-body">
                 <h4>${p.name}</h4>
                 <span class="price-tag">${formatFCFA(p.price)}</span>
@@ -603,7 +609,7 @@ async function fetchProducts(){
     const data = await res.json();
     PRODUCTS = data.products || [];
   } catch {
-    PRODUCTS = DEMO_PRODUCTS; // secours tant que API_BASE n'est pas configuré
+    PRODUCTS = []; // le backend n'est pas joignable pour l'instant
   }
   renderProducts();
 }
@@ -757,7 +763,10 @@ function renderSellerPanel(){
           ${CATEGORIES.map(c => `<option value="${c.key}">${c.label}</option>`).join('')}
         </select>
         <input type="number" name="price" placeholder="Prix en FCFA" min="1" required>
-        <input type="text" name="icon" placeholder="Un emoji (ex: 👗) — facultatif" maxlength="4">
+        <label style="font-size:.8rem; color:#4c5a5f;">Photo du produit (facultatif)
+          <input type="file" name="image" accept="image/*" style="padding:8px 0; border:none;">
+        </label>
+        <input type="text" name="icon" placeholder="Ou un emoji (ex: 👗) si pas de photo" maxlength="4">
         <button type="submit" class="checkout-btn">Ajouter ce produit</button>
         <p class="seller-error" id="addProductError"></p>
       </form>
@@ -783,9 +792,10 @@ async function handleLogin(e){
     });
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || "Connexion impossible.");
-    session = { token: data.token, name: data.seller.name };
+    session = { token: data.token, name: data.seller.name, id: data.seller.id };
     saveSession();
     renderSellerPanel();
+    renderProducts();
   } catch(err){
     errorEl.textContent = err.message || "Le serveur vendeur n'est pas encore accessible (API_BASE à configurer).";
   }
@@ -807,9 +817,10 @@ async function handleSignup(e){
     });
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || "Inscription impossible.");
-    session = { token: data.token, name: data.seller.name };
+    session = { token: data.token, name: data.seller.name, id: data.seller.id };
     saveSession();
     renderSellerPanel();
+    renderProducts();
   } catch(err){
     errorEl.textContent = err.message || "Le serveur vendeur n'est pas encore accessible (API_BASE à configurer).";
   }
@@ -818,14 +829,23 @@ async function handleSignup(e){
 function handleLogout(){
   clearSession();
   renderSellerPanel();
+  renderProducts();
 }
 
 async function handleAddProduct(e){
   e.preventDefault();
   const form = e.target;
   const errorEl = document.getElementById('addProductError');
+  const submitBtn = form.querySelector('button[type="submit"]');
   errorEl.textContent = '';
   try {
+    let image = null;
+    const file = form.image.files[0];
+    if(file){
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Traitement de la photo…";
+      image = await compressImage(file);
+    }
     const res = await fetch(`${API_BASE}/api/products`, {
       method: 'POST',
       headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${session.token}`},
@@ -833,7 +853,8 @@ async function handleAddProduct(e){
         name: form.name.value.trim(),
         cat: form.cat.value,
         price: form.price.value,
-        icon: form.icon.value.trim()
+        icon: form.icon.value.trim(),
+        image
       })
     });
     const data = await res.json();
@@ -842,7 +863,10 @@ async function handleAddProduct(e){
     await fetchProducts();
     await loadMyProducts();
   } catch(err){
-    errorEl.textContent = err.message;
+    errorEl.textContent = err.message || "La photo est peut-être trop lourde, réessayez avec une autre.";
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Ajouter ce produit";
   }
 }
 
@@ -860,7 +884,7 @@ async function loadMyProducts(){
     }
     list.innerHTML = data.products.map(p => `
       <div class="drawer-item">
-        <div class="di-icon">${p.icon}</div>
+        <div class="di-icon">${productMedia(p)}</div>
         <div style="flex:1;">
           <div class="di-name">${p.name}</div>
           <div class="di-price">${formatFCFA(p.price)}</div>
@@ -871,6 +895,35 @@ async function loadMyProducts(){
   } catch {
     list.innerHTML = `<p style="font-size:.85rem; color:#5a6a70;">Le serveur vendeur n'est pas encore accessible.</p>`;
   }
+}
+
+// Redimensionne et compresse la photo choisie côté téléphone avant envoi,
+// pour ne pas envoyer une photo de plusieurs Mo telle quelle.
+function compressImage(file, maxSize = 700, quality = 0.72){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Lecture de l'image impossible."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Image illisible."));
+      img.onload = () => {
+        let { width, height } = img;
+        if(width > height && width > maxSize){
+          height = Math.round(height * (maxSize / width));
+          width = maxSize;
+        } else if(height > maxSize){
+          width = Math.round(width * (maxSize / height));
+          height = maxSize;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 async function deleteMyProduct(id){

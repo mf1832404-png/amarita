@@ -42,7 +42,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '6mb' })); // les photos de produits arrivent en base64 dans le JSON
 
 // Sert index.html (et tout autre fichier posé dans ce même dossier)
 // directement à la racine du site.
@@ -121,10 +121,13 @@ app.get('/api/products', (req, res) => {
 });
 
 app.post('/api/products', authMiddleware, (req, res) => {
-  const { name, price, cat, icon } = req.body;
+  const { name, price, cat, icon, image } = req.body;
   const allowedCats = ["mode", "beaute", "epicerie", "artisanat"];
   if (!name || !price || !allowedCats.includes(cat)) {
     return res.status(400).json({ error: "Nom, prix et catégorie valide requis." });
+  }
+  if (image && !image.startsWith('data:image/')) {
+    return res.status(400).json({ error: "Format de photo invalide." });
   }
   const data = readData();
   const product = {
@@ -135,6 +138,7 @@ app.post('/api/products', authMiddleware, (req, res) => {
     price: Number(price),
     cat,
     icon: icon || "🛍️",
+    image: image || null,
     createdAt: new Date().toISOString()
   };
   data.products.push(product);
