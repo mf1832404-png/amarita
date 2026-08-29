@@ -11,16 +11,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Amarita — Le marché de tout</title>
-<meta name="description" content="Amarita, le marché en ligne de Dakar : mode, beauté, épicerie et artisanat. Livraison rapide, paiement à la livraison ou par Wave/carte, commande directe sur WhatsApp.">
+<meta name="description" content="Amarita, le marché en ligne de Dakar : mode, beauté, épicerie et artisanat. Prix fixes, paiement par WhatsApp, Wave ou Orange Money, livraison assurée par notre service client.">
 <meta name="theme-color" content="#163A4D">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="fr_FR">
 <meta property="og:title" content="Amarita — Le marché de tout">
 <meta property="og:description" content="Mode, beauté, épicerie, artisanat — le marché de Dakar livré chez vous.">
 <meta property="og:url" content="https://votre-domaine.sn">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%BA%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/jpeg" href="lion-logo.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&family=Work+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script type="text/javascript" src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js" defer></script>
 <style>
   :root{
     /* Couleurs */
@@ -105,8 +106,15 @@
     color:var(--indigo);
     text-decoration:none;
     flex-shrink:0;
+    display:inline-flex; align-items:center; gap:8px;
   }
   .logo span{color:var(--corail);}
+  .logo-mark{
+    width:34px; height:34px; display:inline-flex; flex-shrink:0;
+    border-radius:50%; overflow:hidden;
+  }
+  .logo-mark img{width:100%; height:100%; object-fit:cover; display:block;}
+  footer .logo-mark{width:26px; height:26px;}
   .search-box{
     flex:1;
     display:flex;
@@ -218,13 +226,19 @@
   }
   .cat-card:hover{transform:translateY(-4px);}
   .cat-card .icon{
-    font-size:1.8rem; display:inline-flex;
+    font-size:1.8rem; display:inline-flex; position:relative; overflow:hidden;
     width:48px; height:48px; align-items:center; justify-content:center;
     background:color-mix(in srgb, var(--cat-color) 18%, white);
     border-radius:var(--radius-circle); margin-bottom:12px;
   }
+  .cat-card .icon img{width:100%; height:100%; object-fit:cover; border-radius:inherit;}
   .cat-card h3{font-size:1.05rem; margin-bottom:4px;}
   .cat-card p{margin:0; font-size:.85rem; color:#4c5a5f;}
+  .cat-thumb{
+    display:inline-flex; width:26px; height:26px; border-radius:8px;
+    overflow:hidden; vertical-align:middle; margin-right:6px;
+  }
+  .cat-thumb img{width:100%; height:100%; object-fit:cover;}
 
   /* PRODUCTS */
   .cat-section-title{
@@ -370,6 +384,16 @@
     font-family:'Work Sans'; font-size:.9rem; background:var(--blanc); color:var(--encre);
   }
   .seller-error{color:var(--corail); font-size:.8rem; margin:2px 0 0; min-height:1em;}
+  .seller-divider{
+    text-align:center; font-size:.75rem; color:#8a96999a; margin:14px 0;
+    text-transform:uppercase; letter-spacing:.06em;
+  }
+  .apple-btn{
+    width:100%; padding:12px; border-radius:var(--radius); border:none;
+    background:#000; color:#fff; font-family:'Work Sans', sans-serif;
+    font-weight:600; font-size:.95rem; cursor:pointer;
+  }
+  .apple-btn:hover{background:#1a1a1a;}
   .seller-welcome{font-size:.85rem; color:#4c5a5f; margin-bottom:14px;}
   .checkout-btn{
     width:100%; background:var(--vert); color:#fff; border:none; border-radius:var(--radius-pill);
@@ -388,13 +412,46 @@
     .search-box{display:none;}
     .products-grid{grid-template-columns:1fr;}
   }
+
+  /* ASSISTANT SHOPPING IA */
+  .assistant-fab{
+    position:fixed; bottom:20px; right:20px; z-index:60;
+    width:56px; height:56px; border-radius:50%; border:none;
+    background:var(--indigo); color:var(--blanc); font-size:1.4rem;
+    box-shadow:0 6px 16px rgba(22,58,77,0.35); cursor:pointer;
+  }
+  .assistant-panel{
+    position:fixed; bottom:88px; right:20px; z-index:60;
+    width:320px; max-width:calc(100vw - 32px); height:420px; max-height:70vh;
+    background:var(--blanc); border-radius:var(--radius); overflow:hidden;
+    box-shadow:0 12px 32px rgba(22,58,77,0.25);
+    display:flex; flex-direction:column;
+  }
+  .assistant-panel[hidden]{display:none;}
+  .assistant-header{
+    background:var(--indigo); color:var(--blanc); padding:12px 16px;
+    display:flex; justify-content:space-between; align-items:center;
+    font-family:'Bricolage Grotesque', sans-serif; font-weight:700;
+  }
+  .assistant-header button{background:none; border:none; color:var(--blanc); font-size:1rem; cursor:pointer;}
+  .assistant-messages{
+    flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px;
+  }
+  .assistant-msg{max-width:80%; padding:8px 12px; border-radius:14px; font-size:.88rem; line-height:1.4;}
+  .assistant-msg-bot{background:#F1EEE4; color:var(--encre); align-self:flex-start; border-bottom-left-radius:4px;}
+  .assistant-msg-user{background:var(--corail); color:#fff; align-self:flex-end; border-bottom-right-radius:4px;}
+  .assistant-typing{opacity:.6; font-style:italic;}
+  .assistant-form{display:flex; border-top:1px solid rgba(22,38,44,0.08);}
+  .assistant-form input{flex:1; border:none; padding:12px; font-family:'Work Sans', sans-serif; font-size:.9rem; background:var(--blanc); color:var(--encre);}
+  .assistant-form input:focus{outline:none;}
+  .assistant-form button{background:var(--mangue); border:none; width:44px; color:var(--encre); font-size:1.1rem; cursor:pointer;}
 </style>
 </head>
 <body>
 
 <header>
   <div class="header-inner">
-    <a href="#top" class="logo">Amar<span>ita</span></a>
+    <a href="#top" class="logo"><span class="logo-mark"><img src="lion-logo.jpg" alt="Amarita"></span>Amar<span>ita</span></a>
     <div class="search-box">
       <span aria-hidden="true">🔎</span>
       <input id="searchInput" type="text" placeholder="Chercher un produit… karité, boubou, riz">
@@ -474,7 +531,7 @@
 <footer>
   <div class="wrap footer-grid">
     <div>
-      <div class="logo">Amar<span style="color:var(--corail);">ita</span></div>
+      <div class="logo"><span class="logo-mark"><img src="lion-logo.jpg" alt="Amarita"></span>Amar<span style="color:var(--corail);">ita</span></div>
       <p style="max-width:32ch;">Le marché, tel qu'il devrait être en ligne : simple, chaleureux, sans surprise.</p>
       <a class="wa-link" href="#" id="footerWa">💬 Écrire sur WhatsApp</a>
     </div>
@@ -497,9 +554,10 @@
     <div class="pay-methods" role="radiogroup" aria-label="Mode de paiement">
       <label class="pay-opt"><input type="radio" name="paymethod" value="whatsapp" checked><span>WhatsApp</span></label>
       <label class="pay-opt"><input type="radio" name="paymethod" value="wave"><span>Wave</span></label>
-      <label class="pay-opt"><input type="radio" name="paymethod" value="card"><span>Carte bancaire</span></label>
+      <label class="pay-opt"><input type="radio" name="paymethod" value="orange"><span>Orange Money</span></label>
     </div>
-    <div id="cardNote" class="card-note">Le paiement par carte nécessite un compte marchand (CinetPay, PayTech, Wave Business…) relié à un serveur sécurisé. Dites-moi lequel vous utilisez pour brancher l'intégration.</div>
+    <div id="cardNote" class="card-note"></div>
+    <p style="font-size:.78rem; color:#5a6a70; margin:6px 0 0;">Prix fixes, aucune négociation. Livraison assurée par notre service client Amarita.</p>
     <button class="checkout-btn" id="checkoutBtn">💬 Commander sur WhatsApp</button>
   </div>
 </aside>
@@ -515,22 +573,48 @@
 <script>
 const WHATSAPP_NUMBER = "221777663687";
 const WAVE_MERCHANT_LINK = "https://pay.wave.com/m/M_sn_r0XI4iXIkkew/c/sn";
-// Le site et le backend sont maintenant assemblés dans un seul serveur,
-// donc ces deux chemins restent relatifs — rien à modifier ici, même une
+// Numéro Orange Money à utiliser pour recevoir les paiements (à remplir dès
+// que vous avez un compte Orange Money — pas besoin d'API pour ce mode
+// simple, juste votre numéro marchand ou personnel).
+const ORANGE_MONEY_NUMBER = "";
+// Le site et le backend sont assemblés dans un seul serveur,
+// donc ce chemin reste relatif — rien à modifier ici, même une
 // fois déployé.
-const PAYTECH_ENDPOINT = "/api/paytech/request-payment";
 const API_BASE = "";
+// Doit être identique au "Services ID" créé dans votre compte Apple
+// Developer (Sign in with Apple activé pour ce domaine).
+const APPLE_CLIENT_ID = "com.amarita.web";
+// L'endpoint PayTech reste dans le backend mais n'est plus utilisé par le
+// site pour l'instant (en pause, à réactiver plus tard si besoin).
+
+// Logo : image lion-logo.jpg (à la racine du dépôt), recadrée en cercle par CSS.
 
 // ──────────────────────────────────────────────────────────────────
-// POUR AJOUTER UNE CATÉGORIE : copiez une ligne et changez key/label/icon/blurb.
+// POUR AJOUTER UNE CATÉGORIE : copiez une ligne et changez key/label/icon/blurb/image.
 // "color" doit être l'une de : var(--corail), var(--bissap), var(--vert), var(--mangue)
+// "image" : chemin vers une vraie photo à poser dans le dossier /categories du dépôt
+// (ex: categories/mode.jpg). Tant que la photo n'existe pas encore, l'emoji "icon"
+// s'affiche automatiquement à la place — rien ne casse en attendant les vraies photos.
 // ──────────────────────────────────────────────────────────────────
+// "image" pointe vers de vraies photos libres de droits (licence Pexels :
+// usage commercial autorisé, aucune attribution requise). Tu pourras les
+// remplacer plus tard par tes propres photos de produits, en collant
+// simplement une autre adresse d'image ici — le reste du code ne change pas.
 const CATEGORIES = [
-  {key:"mode", label:"Mode & Vêtements", icon:"👗", color:"var(--corail)", blurb:"Boubous, wax, sacs et accessoires."},
-  {key:"beaute", label:"Beauté & Bien-être", icon:"🧴", color:"var(--bissap)", blurb:"Soins naturels, karité, huiles précieuses."},
-  {key:"epicerie", label:"Épicerie & Alimentation", icon:"🌾", color:"var(--vert)", blurb:"Riz, thé, jus et produits du terroir."},
-  {key:"artisanat", label:"Artisanat & Maison", icon:"🧺", color:"var(--mangue)", blurb:"Pièces tissées, tressées et faites main."},
+  {key:"mode", label:"Mode & Vêtements", icon:"👗", image:"https://images.pexels.com/photos/38487458/pexels-photo-38487458.jpeg?auto=compress&cs=tinysrgb&w=600", color:"var(--corail)", blurb:"Boubous, wax, sacs et accessoires."},
+  {key:"beaute", label:"Beauté & Bien-être", icon:"🧴", image:"https://images.pexels.com/photos/11284698/pexels-photo-11284698.jpeg?auto=compress&cs=tinysrgb&w=600", color:"var(--bissap)", blurb:"Soins naturels, karité, huiles précieuses."},
+  {key:"epicerie", label:"Épicerie & Alimentation", icon:"🌾", image:"https://images.pexels.com/photos/18328392/pexels-photo-18328392.jpeg?auto=compress&cs=tinysrgb&w=600", color:"var(--vert)", blurb:"Riz, thé, jus et produits du terroir."},
+  {key:"artisanat", label:"Artisanat & Maison", icon:"🧺", image:"https://images.pexels.com/photos/16819825/pexels-photo-16819825.jpeg?auto=compress&cs=tinysrgb&w=600", color:"var(--mangue)", blurb:"Pièces tissées, tressées et faites main."},
 ];
+
+// Construit une petite vignette photo pour une catégorie, avec repli automatique
+// vers l'emoji si la photo n'est pas (encore) présente sur le serveur.
+function catThumb(c, cls){
+  return `<span class="${cls}">
+    <img src="${c.image}" alt="${c.label}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
+    <span style="display:none;">${c.icon}</span>
+  </span>`;
+}
 
 let PRODUCTS = []; // rempli par fetchProducts() au chargement de la page
 let session = null; // { token, name, id } — compte vendeur connecté
@@ -546,7 +630,7 @@ function renderCategories(){
   const grid = document.getElementById('categories-grid');
   grid.innerHTML = CATEGORIES.map(c => `
     <button class="cat-card" style="--cat-color:${c.color}" onclick="document.getElementById('${c.key}').scrollIntoView({behavior:'smooth'})">
-      <span class="icon">${c.icon}</span>
+      ${catThumb(c, 'icon')}
       <h3>${c.label}</h3>
       <p>${c.blurb}</p>
     </button>
@@ -566,7 +650,7 @@ function renderProducts(){
     return `
       <div id="${c.key}">
         <div class="cat-section-title">
-          <h2>${c.icon} ${c.label}</h2>
+          <h2>${catThumb(c, 'cat-thumb')} ${c.label}</h2>
           <span class="count">${items.length} produits</span>
         </div>
         ${items.length === 0 ? `
@@ -730,18 +814,21 @@ function renderSellerPanel(){
         <button type="button" class="seller-tab" data-tab="signup">Créer un compte</button>
       </div>
       <form id="loginForm" class="seller-form">
-        <input type="tel" name="phone" placeholder="Numéro de téléphone" required>
+        <input type="email" name="email" placeholder="Adresse e-mail" required>
         <input type="password" name="password" placeholder="Mot de passe" required>
         <button type="submit" class="checkout-btn">Se connecter</button>
         <p class="seller-error" id="loginError"></p>
       </form>
       <form id="signupForm" class="seller-form" style="display:none;">
         <input type="text" name="name" placeholder="Nom de la boutique" required>
-        <input type="tel" name="phone" placeholder="Numéro de téléphone" required>
+        <input type="email" name="email" placeholder="Adresse e-mail" required>
         <input type="password" name="password" placeholder="Mot de passe (6 caractères min.)" required minlength="6">
         <button type="submit" class="checkout-btn">Créer mon compte vendeur</button>
         <p class="seller-error" id="signupError"></p>
       </form>
+      <div class="seller-divider">ou</div>
+      <button type="button" id="appleSignInBtn" class="apple-btn"> Se connecter avec Apple</button>
+      <p class="seller-error" id="appleError"></p>
     `;
     body.querySelectorAll('.seller-tab').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -753,6 +840,7 @@ function renderSellerPanel(){
     });
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
     document.getElementById('signupForm').addEventListener('submit', handleSignup);
+    document.getElementById('appleSignInBtn').addEventListener('click', handleAppleSignIn);
   } else {
     title.textContent = "🏪 " + session.name;
     body.innerHTML = `
@@ -772,11 +860,14 @@ function renderSellerPanel(){
       </form>
       <h4 style="margin:20px 0 8px; font-family:'Bricolage Grotesque';">Mes produits</h4>
       <div id="myProductsList"></div>
+      <h4 style="margin:20px 0 8px; font-family:'Bricolage Grotesque';">Mes commandes (commission Amarita : 10%)</h4>
+      <div id="myOrdersList"></div>
       <button type="button" id="logoutBtn" class="di-remove" style="margin-top:16px;">Se déconnecter</button>
     `;
     document.getElementById('addProductForm').addEventListener('submit', handleAddProduct);
     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
     loadMyProducts();
+    loadMyOrders();
   }
 }
 
@@ -788,7 +879,7 @@ async function handleLogin(e){
   try {
     const res = await fetch(`${API_BASE}/api/auth/login`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({phone: form.phone.value.trim(), password: form.password.value})
+      body: JSON.stringify({email: form.email.value.trim(), password: form.password.value})
     });
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || "Connexion impossible.");
@@ -811,7 +902,7 @@ async function handleSignup(e){
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
         name: form.name.value.trim(),
-        phone: form.phone.value.trim(),
+        email: form.email.value.trim(),
         password: form.password.value
       })
     });
@@ -823,6 +914,40 @@ async function handleSignup(e){
     renderProducts();
   } catch(err){
     errorEl.textContent = err.message || "Le serveur vendeur n'est pas encore accessible (API_BASE à configurer).";
+  }
+}
+
+async function handleAppleSignIn(){
+  const errorEl = document.getElementById('appleError');
+  errorEl.textContent = '';
+  if(typeof AppleID === 'undefined'){
+    errorEl.textContent = "Connexion Apple pas encore prête, réessayez dans un instant.";
+    return;
+  }
+  try {
+    AppleID.auth.init({
+      clientId: APPLE_CLIENT_ID,
+      scope: 'name email',
+      redirectURI: window.location.origin,
+      usePopup: true
+    });
+    const response = await AppleID.auth.signIn();
+    const idToken = response.authorization.id_token;
+    const fullName = response.user && response.user.name
+      ? `${response.user.name.firstName || ''} ${response.user.name.lastName || ''}`.trim()
+      : undefined;
+    const res = await fetch(`${API_BASE}/api/auth/apple`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id_token: idToken, name: fullName })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || "Connexion Apple impossible.");
+    session = { token: data.token, name: data.seller.name, id: data.seller.id };
+    saveSession();
+    renderSellerPanel();
+    renderProducts();
+  } catch(err){
+    errorEl.textContent = (err && err.error) || err.message || "Connexion Apple annulée ou impossible pour l'instant (vérifiez que Sign in with Apple est bien configuré sur votre compte Apple Developer).";
   }
 }
 
@@ -890,6 +1015,31 @@ async function loadMyProducts(){
           <div class="di-price">${formatFCFA(p.price)}</div>
         </div>
         <button class="di-remove" onclick="deleteMyProduct('${p.id}')">Retirer</button>
+      </div>
+    `).join('');
+  } catch {
+    list.innerHTML = `<p style="font-size:.85rem; color:#5a6a70;">Le serveur vendeur n'est pas encore accessible.</p>`;
+  }
+}
+
+async function loadMyOrders(){
+  const list = document.getElementById('myOrdersList');
+  if(!list) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/orders/mine`, {
+      headers: { 'Authorization': `Bearer ${session.token}` }
+    });
+    const data = await res.json();
+    if(!data.orders || data.orders.length === 0){
+      list.innerHTML = `<p style="font-size:.85rem; color:#5a6a70;">Aucune commande pour l'instant.</p>`;
+      return;
+    }
+    list.innerHTML = data.orders.map(o => `
+      <div class="drawer-item">
+        <div style="flex:1;">
+          <div class="di-name">${new Date(o.createdAt).toLocaleDateString('fr-FR')} — ${o.status}</div>
+          <div class="di-price">Part vendeur (90%) : ${formatFCFA(o.part.amountDue)}</div>
+        </div>
       </div>
     `).join('');
   } catch {
@@ -979,50 +1129,50 @@ function updateCheckoutUI(){
     btn.textContent = '🌊 Payer avec Wave';
     note.classList.remove('visible');
   } else {
-    btn.textContent = '💳 Payer par carte (PayTech)';
-    note.textContent = "Vous serez redirigé vers la page sécurisée PayTech pour entrer votre carte.";
+    btn.textContent = '🍊 Payer avec Orange Money';
+    note.textContent = ORANGE_MONEY_NUMBER
+      ? `Envoyez le montant au ${ORANGE_MONEY_NUMBER} via Orange Money (*144#), puis confirmez sur WhatsApp.`
+      : "Orange Money n'est pas encore configuré (ORANGE_MONEY_NUMBER à renseigner dans le code).";
     note.classList.add('visible');
   }
 }
 
-function payWithPaytech(){
-  const btn = document.getElementById('checkoutBtn');
-  const note = document.getElementById('cardNote');
-  const items = cart.map(i => { const p = productOf(i.id); return {name: p.name, qty: i.qty}; });
-  const total = cartTotal();
-
-  btn.disabled = true;
-  btn.textContent = "Connexion à PayTech…";
-
-  fetch(PAYTECH_ENDPOINT, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({items, total})
-  })
-  .then(r => r.json())
-  .then(data => {
-    if(data.redirect_url){
-      window.location.href = data.redirect_url;
-    } else {
-      throw new Error(data.error || "réponse invalide");
-    }
-  })
-  .catch(() => {
-    note.textContent = "Le backend PayTech n'est pas encore accessible à l'adresse configurée (PAYTECH_ENDPOINT). Déployez paytech-backend-example.js puis mettez à jour cette adresse dans le code.";
-    note.classList.add('visible');
-    btn.disabled = false;
-    btn.textContent = '💳 Payer par carte (PayTech)';
-  });
+function goToOrange(amount){
+  const message = `Bonjour Amarita, je viens d'envoyer ${formatFCFA(amount)} par Orange Money, voici ma commande :\n${buildWhatsAppMessage()}`;
+  goToWhatsApp(message);
 }
 
-function handleCheckout(){
+// Enregistre la commande côté serveur AVANT le paiement, pour que la
+// commission (10%) et la part due à chaque vendeur (90%) soient calculées
+// et gardées en mémoire — même si le paiement lui-même (WhatsApp/Wave/Orange)
+// se termine hors du site. Si le serveur ne répond pas, la commande continue
+// quand même (le client ne doit jamais être bloqué par un souci technique).
+async function recordOrder(paymentMethod){
+  const items = cart.map(i => ({ productId: i.id, qty: i.qty }));
+  try {
+    const res = await fetch(`${API_BASE}/api/orders`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ items, paymentMethod })
+    });
+    const data = await res.json();
+    if(res.ok) return { total: data.total };
+  } catch { /* pas grave, on continue avec le total calculé côté client */ }
+  return { total: cartTotal() };
+}
+
+async function handleCheckout(){
   const method = selectedPayMethod();
+  const btn = document.getElementById('checkoutBtn');
+  btn.disabled = true;
+  const { total } = await recordOrder(method);
+  btn.disabled = false;
   if(method === 'whatsapp'){
     goToWhatsApp(buildWhatsAppMessage());
   } else if(method === 'wave'){
-    goToWave(cartTotal());
+    goToWave(total);
   } else {
-    payWithPaytech();
+    goToOrange(total);
   }
 }
 
@@ -1052,6 +1202,78 @@ loadSession();
 fetchProducts(); // charge les produits depuis le backend (ou les produits de secours) puis les affiche
 renderCart();
 updateCheckoutUI();
+</script>
+
+<button id="assistantToggle" class="assistant-fab" aria-label="Ouvrir l'assistant Amarita">💬</button>
+<div id="assistantPanel" class="assistant-panel" hidden>
+  <div class="assistant-header">
+    <span>Assistant Amarita</span>
+    <button type="button" id="assistantClose" aria-label="Fermer">✕</button>
+  </div>
+  <div id="assistantMessages" class="assistant-messages"></div>
+  <form id="assistantForm" class="assistant-form">
+    <input type="text" id="assistantInput" placeholder="Je cherche..." autocomplete="off">
+    <button type="submit" aria-label="Envoyer">➤</button>
+  </form>
+</div>
+<script>
+let assistantHistory = [];
+const assistantMessagesEl = document.getElementById('assistantMessages');
+
+function addAssistantMessage(role, text){
+  const div = document.createElement('div');
+  div.className = 'assistant-msg ' + (role === 'user' ? 'assistant-msg-user' : 'assistant-msg-bot');
+  div.textContent = text;
+  assistantMessagesEl.appendChild(div);
+  assistantMessagesEl.scrollTop = assistantMessagesEl.scrollHeight;
+}
+
+document.getElementById('assistantToggle').addEventListener('click', () => {
+  const panel = document.getElementById('assistantPanel');
+  const opening = panel.hasAttribute('hidden');
+  if(opening) panel.removeAttribute('hidden'); else panel.setAttribute('hidden','');
+  if(opening && assistantMessagesEl.children.length === 0){
+    addAssistantMessage('assistant', "Bonjour 👋 Dites-moi ce que vous cherchez (ex. \"une robe wax pour un mariage\") et je vous propose des produits Amarita.");
+  }
+});
+document.getElementById('assistantClose').addEventListener('click', () => {
+  document.getElementById('assistantPanel').setAttribute('hidden', '');
+});
+
+document.getElementById('assistantForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = document.getElementById('assistantInput');
+  const msg = input.value.trim();
+  if(!msg) return;
+  addAssistantMessage('user', msg);
+  assistantHistory.push({role:'user', content: msg});
+  input.value = '';
+  input.disabled = true;
+
+  const typingEl = document.createElement('div');
+  typingEl.className = 'assistant-msg assistant-msg-bot assistant-typing';
+  typingEl.textContent = '…';
+  assistantMessagesEl.appendChild(typingEl);
+  assistantMessagesEl.scrollTop = assistantMessagesEl.scrollHeight;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/assistant/chat`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ message: msg, history: assistantHistory })
+    });
+    const data = await res.json();
+    typingEl.remove();
+    if(!res.ok) throw new Error(data.error || "Erreur");
+    addAssistantMessage('assistant', data.reply);
+    assistantHistory.push({role:'assistant', content: data.reply});
+  } catch(err){
+    typingEl.remove();
+    addAssistantMessage('assistant', "Désolé, je ne suis pas disponible pour l'instant — vous pouvez commander directement via WhatsApp en attendant 💬");
+  }
+  input.disabled = false;
+  input.focus();
+});
 </script>
 </body>
 </html>

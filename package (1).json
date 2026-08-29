@@ -1,0 +1,19 @@
+{
+  "name": "amarita-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Site Amarita + comptes vendeurs (e-mail/Apple) + commandes + commissions, en un seul serveur",
+  "scripts": {
+    "start": "node amarita-backend.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.9.0",
+    "apple-signin-auth": "^1.7.6"
+  }
+}
