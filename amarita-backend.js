@@ -109,10 +109,11 @@ async function connectWithRetry(uri, attempts = 5, delayMs = 4000){
 
 async function start(){
   const client = await connectWithRetry(MONGODB_URI);
-  const db = client.db('Amarita');
+  const db = client.db('amarita');
   const sellers = db.collection('sellers');
   const products = db.collection('products');
   const orders = db.collection('orders');
+  const livreurs = db.collection('livreurs');
 
   // Une même adresse e-mail ne peut créer qu'un seul compte vendeur
   // (que ce soit par mot de passe ou par Apple).
@@ -280,6 +281,29 @@ async function start(){
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "Erreur serveur lors de la suppression." });
+    }
+  });
+
+  // ---------- Candidatures livreurs ----------
+  // Formulaire simple : les candidatures sont enregistrées, Amarita les
+  // recontacte manuellement pour l'instant (pas d'attribution automatique
+  // de commandes — ce serait une étape suivante, plus complexe).
+  app.post('/api/livreurs', async (req, res) => {
+    try {
+      const { name, phone, vehicule, zone } = req.body;
+      if (!name || !phone || !vehicule || !zone) {
+        return res.status(400).json({ error: "Tous les champs sont requis." });
+      }
+      await livreurs.insertOne({
+        id: "l_" + Date.now(),
+        name, phone, vehicule, zone,
+        status: 'nouvelle_candidature',
+        createdAt: new Date().toISOString()
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erreur serveur lors de l'envoi de la candidature." });
     }
   });
 

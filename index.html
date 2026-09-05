@@ -12,27 +12,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Amarita — Le marché de tout</title>
 <meta name="description" content="Amarita, le marché en ligne de Dakar : mode, beauté, épicerie et artisanat. Prix fixes, paiement par WhatsApp, Wave ou Orange Money, livraison assurée par notre service client.">
-<meta name="theme-color" content="#163A4D">
+<meta name="theme-color" content="#2D1449">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="fr_FR">
 <meta property="og:title" content="Amarita — Le marché de tout">
 <meta property="og:description" content="Mode, beauté, épicerie, artisanat — le marché de Dakar livré chez vous.">
 <meta property="og:url" content="https://votre-domaine.sn">
-<link rel="icon" type="image/jpeg" href="lion-logo.jpg">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8D%83%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&family=Work+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script type="text/javascript" src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js" defer></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 <style>
   :root{
-    /* Couleurs */
-    --encre:#16262C;
-    --indigo:#163A4D;
-    --sable:#F3E8CE;
-    --mangue:#E2932E;
-    --corail:#D6553A;
-    --vert:#4C7A5E;
-    --bissap:#7A2E3A;
-    --blanc:#FFFCF5;
+    /* Palette pourpre royal & or — esthétique afrofuturiste. Mêmes noms de
+       variables qu'avant pour ne rien casser ailleurs, seules les valeurs changent. */
+    --encre:#170B26;
+    --indigo:#2D1449;       /* pourpre royal profond — couleur signature */
+    --sable:#F7F0E1;        /* ivoire chaud */
+    --mangue:#E8B923;       /* or vibrant */
+    --corail:#8B2FE0;       /* violet électrique — couleur d'action, effet "énergie" */
+    --vert:#B8863E;         /* bronze */
+    --bissap:#12081F;       /* noir pourpré profond */
+    --blanc:#FCF8ED;
 
     /* Rayons de bordure */
     --radius-sm:10px;
@@ -85,6 +88,27 @@
     letter-spacing:-0.02em;
   }
   .mono{font-family:'Space Mono', monospace;}
+
+  /* ANIMATIONS */
+  @keyframes fadeInUp{
+    from{opacity:0; transform:translateY(18px);}
+    to{opacity:1; transform:translateY(0);}
+  }
+  @keyframes softPulse{
+    0%,100%{box-shadow:0 6px 16px rgba(45,20,73,0.45);}
+    50%{box-shadow:0 6px 26px rgba(232,185,35,0.6);}
+  }
+  @keyframes bounceIn{
+    0%{transform:scale(1);}
+    40%{transform:scale(1.35);}
+    100%{transform:scale(1);}
+  }
+  .reveal{opacity:0;}
+  .reveal.visible{animation:fadeInUp .6s ease-out forwards;}
+  .cat-card, .product-card{transition:transform .2s ease, box-shadow .2s ease;}
+  .cat-card:hover, .product-card:hover{transform:translateY(-3px); box-shadow:0 10px 24px rgba(45,20,73,0.18);}
+  .assistant-fab{animation:softPulse 2.8s ease-in-out infinite;}
+  .cart-badge.bump{animation:bounceIn .35s ease;}
   a{color:inherit;}
   button{font-family:inherit; cursor:pointer;}
   :focus-visible{outline:3px solid var(--mangue); outline-offset:2px;}
@@ -93,8 +117,9 @@
   /* HEADER */
   header{
     position:sticky; top:0; z-index:40;
-    background:var(--blanc);
-    border-bottom:1px solid rgba(22,38,44,0.08);
+    background:var(--indigo);
+    border-bottom:2px solid var(--mangue);
+    box-shadow:0 2px 20px rgba(139,47,224,0.25);
   }
   .header-inner{
     display:flex; align-items:center; gap:20px;
@@ -103,18 +128,24 @@
   .logo{
     font-family:'Bricolage Grotesque', sans-serif;
     font-weight:800; font-size:1.5rem;
-    color:var(--indigo);
+    color:var(--encre);
     text-decoration:none;
     flex-shrink:0;
-    display:inline-flex; align-items:center; gap:8px;
+    display:inline-flex; align-items:center; gap:2px;
   }
-  .logo span{color:var(--corail);}
-  .logo-mark{
-    width:34px; height:34px; display:inline-flex; flex-shrink:0;
-    border-radius:50%; overflow:hidden;
+  .logo .accent{color:var(--corail);}
+  .logo .leaf-i{
+    position:relative; display:inline-block; color:var(--corail);
+    font-style:normal;
   }
-  .logo-mark img{width:100%; height:100%; object-fit:cover; display:block;}
-  footer .logo-mark{width:26px; height:26px;}
+  .logo .leaf-i::before{
+    content:"";
+    position:absolute; left:50%; top:-0.68em;
+    width:9px; height:9px;
+    background:var(--mangue);
+    border-radius:0 70% 0 70%;
+    transform:translateX(-50%) rotate(-40deg);
+  }
   .search-box{
     flex:1;
     display:flex;
@@ -134,8 +165,9 @@
   nav.catnav{display:flex; gap:18px; margin-left:auto;}
   nav.catnav a{
     font-size:.9rem; font-weight:600; text-decoration:none;
-    color:var(--indigo); white-space:nowrap;
+    color:var(--mangue); white-space:nowrap;
   }
+  .header-inner .logo{color:var(--blanc);}
   .cart-btn{
     position:relative;
     background:var(--indigo); color:var(--blanc);
@@ -158,18 +190,20 @@
     background:var(--indigo);
     color:var(--blanc);
     padding-top:18px;
+    background-image:
+      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(232,185,35,0.16), transparent 70%),
+      radial-gradient(ellipse 60% 50% at 85% 100%, rgba(139,47,224,0.25), transparent 70%);
+    background-repeat: no-repeat;
   }
-  .bunting{
-    display:flex; justify-content:center; gap:26px;
-    padding-top:10px; margin-bottom:6px;
-    border-bottom: 1px dashed rgba(243,232,206,0.35);
+  .hero-divider{
+    max-width:280px; height:1px; margin:14px auto 6px;
+    background:linear-gradient(90deg, transparent, var(--mangue), transparent);
+    position:relative;
   }
-  .flag{
-    width:0; height:0;
-    border-left:9px solid transparent;
-    border-right:9px solid transparent;
-    border-top:16px solid var(--flag-color);
-    transform:translateY(1px);
+  .hero-divider::after{
+    content:"";
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(45deg);
+    width:7px; height:7px; background:var(--mangue);
   }
   .hero-content{
     text-align:center;
@@ -178,6 +212,7 @@
   .hero-content h1{
     font-size:clamp(2.1rem, 5vw, 3.4rem);
     max-width:14ch; margin:0 auto .35em;
+    text-shadow:0 0 24px rgba(232,185,35,0.45);
   }
   .hero-content p{
     max-width:44ch; margin:0 auto 28px; opacity:.85; font-size:1.05rem;
@@ -288,7 +323,7 @@
     flex:1; background:var(--encre); color:#fff; border:none; border-radius:var(--radius-pill);
     padding:8px 12px; font-size:.85rem; font-weight:600;
   }
-  .add-btn:hover{background:var(--indigo);}
+  .add-btn:hover{background:var(--corail); box-shadow:0 0 14px rgba(139,47,224,0.5);}
 
   /* TRUST BAR */
   .trust-bar{
@@ -300,8 +335,12 @@
     display:grid; grid-template-columns:repeat(3,1fr); gap:20px;
     padding:34px 0;
   }
-  .trust-item{display:flex; gap:12px; align-items:flex-start;}
-  .trust-item .ic{font-size:1.4rem;}
+  .trust-item{display:flex; gap:14px; align-items:flex-start;}
+  .trust-item .ic{
+    width:52px; height:52px; border-radius:50%; overflow:hidden; flex-shrink:0;
+    border:2px solid var(--mangue);
+  }
+  .trust-item .ic img{width:100%; height:100%; object-fit:cover; display:block;}
   .trust-item h4{margin:0 0 2px; font-size:.95rem;}
   .trust-item p{margin:0; font-size:.82rem; color:#4c5a5f;}
 
@@ -396,9 +435,10 @@
   .apple-btn:hover{background:#1a1a1a;}
   .seller-welcome{font-size:.85rem; color:#4c5a5f; margin-bottom:14px;}
   .checkout-btn{
-    width:100%; background:var(--vert); color:#fff; border:none; border-radius:var(--radius-pill);
+    width:100%; background:var(--corail); color:#fff; border:none; border-radius:var(--radius-pill);
     padding:13px; font-weight:700; font-size:.95rem; display:flex; align-items:center;
     justify-content:center; gap:8px;
+    box-shadow:0 4px 16px rgba(139,47,224,0.4);
   }
   .checkout-btn:disabled{background:#a9b6ac; cursor:not-allowed;}
 
@@ -418,13 +458,13 @@
     position:fixed; bottom:20px; right:20px; z-index:60;
     width:56px; height:56px; border-radius:50%; border:none;
     background:var(--indigo); color:var(--blanc); font-size:1.4rem;
-    box-shadow:0 6px 16px rgba(22,58,77,0.35); cursor:pointer;
+    box-shadow:0 6px 16px rgba(45,20,73,0.35); cursor:pointer;
   }
   .assistant-panel{
     position:fixed; bottom:88px; right:20px; z-index:60;
     width:320px; max-width:calc(100vw - 32px); height:420px; max-height:70vh;
     background:var(--blanc); border-radius:var(--radius); overflow:hidden;
-    box-shadow:0 12px 32px rgba(22,58,77,0.25);
+    box-shadow:0 12px 32px rgba(45,20,73,0.3);
     display:flex; flex-direction:column;
   }
   .assistant-panel[hidden]{display:none;}
@@ -451,7 +491,7 @@
 
 <header>
   <div class="header-inner">
-    <a href="#top" class="logo"><span class="logo-mark"><img src="lion-logo.jpg" alt="Amarita"></span>Amar<span>ita</span></a>
+    <a href="#top" class="logo">Amar<span class="leaf-i">ı</span><span class="accent">ta</span></a>
     <div class="search-box">
       <span aria-hidden="true">🔎</span>
       <input id="searchInput" type="text" placeholder="Chercher un produit… karité, boubou, riz">
@@ -461,9 +501,14 @@
       <a href="#beaute">Beauté</a>
       <a href="#epicerie">Épicerie</a>
       <a href="#artisanat">Artisanat</a>
+      <a href="#fournitures">Fournitures</a>
+      <a href="#immobilier">Immobilier</a>
     </nav>
-    <button class="cart-btn" id="openSellerBtn" aria-label="Espace vendeur" style="background:var(--vert); margin-right:8px;">
-      🏪 Vendeur
+    <button class="cart-btn" id="openSellerBtn" aria-label="Mon compte" style="background:var(--vert); margin-right:8px;">
+      👤 Compte
+    </button>
+    <button class="cart-btn" id="openLivreurBtn" aria-label="Devenir livreur" style="background:var(--indigo); margin-right:8px;">
+      🛵 Livreur
     </button>
     <button class="cart-btn" id="openCartBtn" aria-label="Ouvrir le panier">
       🧺 Panier <span class="cart-badge" id="cartCount">0</span>
@@ -472,19 +517,10 @@
 </header>
 
 <div class="hero" id="top">
-  <div class="bunting" aria-hidden="true">
-    <span class="flag" style="--flag-color:var(--corail)"></span>
-    <span class="flag" style="--flag-color:var(--mangue)"></span>
-    <span class="flag" style="--flag-color:var(--vert)"></span>
-    <span class="flag" style="--flag-color:var(--bissap)"></span>
-    <span class="flag" style="--flag-color:var(--corail)"></span>
-    <span class="flag" style="--flag-color:var(--mangue)"></span>
-    <span class="flag" style="--flag-color:var(--vert)"></span>
-    <span class="flag" style="--flag-color:var(--bissap)"></span>
-  </div>
+  <div class="hero-divider" aria-hidden="true"></div>
   <div class="hero-content">
-    <h1>Le marché de tout, sans bouger de chez vous</h1>
-    <p>Mode, beauté, épicerie, artisanat — les étals du marché rassemblés en un seul endroit, livrés chez vous.</p>
+    <h1>Le marché pousse aussi en ligne</h1>
+    <p>Mode, beauté, épicerie, artisanat, fournitures, immobilier — tout ce que le marché fait pousser, à portée de main.</p>
     <form class="hero-search" onsubmit="event.preventDefault(); document.getElementById('searchInput').value=this.q.value; filterProducts(this.q.value); document.getElementById('produits').scrollIntoView({behavior:'smooth'});">
       <input name="q" type="text" placeholder="Que cherchez-vous aujourd'hui ?">
       <button type="submit">Chercher</button>
@@ -494,7 +530,7 @@
 </div>
 
 <main class="wrap">
-  <section class="section" id="categories">
+  <section class="section reveal" id="categories">
     <div class="section-head">
       <span class="eyebrow">Les étals</span>
       <h2>Quatre coins du marché</h2>
@@ -502,7 +538,7 @@
     <div id="categories-grid"></div>
   </section>
 
-  <section class="section" id="produits">
+  <section class="section reveal" id="produits">
     <div class="section-head" style="margin-top:20px;">
       <span class="eyebrow">La marchandise</span>
       <h2>Nos produits</h2>
@@ -514,26 +550,35 @@
 <div class="trust-bar">
   <div class="wrap trust-inner">
     <div class="trust-item">
-      <span class="ic">🚚</span>
-      <div><h4>Livraison à Dakar en 24h</h4><p>Et sous 48 à 72h dans les autres régions.</p></div>
+      <span class="ic"><img src="https://images.pexels.com/photos/6867941/pexels-photo-6867941.jpeg?auto=compress&cs=tinysrgb&w=200" alt=""></span>
+      <div><h4>Livré par nos livreurs partenaires</h4><p>Un réseau de livreurs indépendants près de chez vous, pas une promesse en l'air.</p></div>
     </div>
     <div class="trust-item">
-      <span class="ic">💵</span>
+      <span class="ic"><img src="https://images.pexels.com/photos/163069/mobile-phone-money-banknotes-us-dollars-163069.jpeg?auto=compress&cs=tinysrgb&w=200" alt=""></span>
       <div><h4>Paiement à la livraison</h4><p>Vous payez quand le colis arrive entre vos mains.</p></div>
     </div>
     <div class="trust-item">
-      <span class="ic">📱</span>
-      <div><h4>Commande confirmée sur WhatsApp</h4><p>Un vrai vendeur répond, pas un robot.</p></div>
+      <span class="ic"><img src="https://images.pexels.com/photos/7504886/pexels-photo-7504886.jpeg?auto=compress&cs=tinysrgb&w=200" alt=""></span>
+      <div><h4>Service Client IA, disponible tout le temps</h4><p>Une question, une recherche, un souci de livraison — répondu en quelques secondes.</p></div>
     </div>
   </div>
 </div>
 
+<section class="section wrap reveal" id="zone-livraison" style="margin:40px auto;">
+  <div class="section-head">
+    <span class="eyebrow">Où on livre</span>
+    <h2>Notre zone de livraison</h2>
+  </div>
+  <p style="font-size:.85rem; color:#5a6a70; margin-bottom:14px;">Autorisez la localisation pour voir si vous êtes dans notre zone (Thiès / Dakar).</p>
+  <div id="deliveryMap" style="height:280px; border-radius:var(--radius); overflow:hidden;"></div>
+</section>
+
 <footer>
   <div class="wrap footer-grid">
     <div>
-      <div class="logo"><span class="logo-mark"><img src="lion-logo.jpg" alt="Amarita"></span>Amar<span style="color:var(--corail);">ita</span></div>
+      <div class="logo">Amar<span class="leaf-i">ı</span><span class="accent">ta</span></div>
       <p style="max-width:32ch;">Le marché, tel qu'il devrait être en ligne : simple, chaleureux, sans surprise.</p>
-      <a class="wa-link" href="#" id="footerWa">💬 Écrire sur WhatsApp</a>
+      <a class="wa-link" href="#" id="footerWa">🤖 Service Client IA</a>
     </div>
     <div>
       <p>© 2026 Amarita. Tous droits réservés.</p>
@@ -570,6 +615,31 @@
   <div class="drawer-items" id="sellerBody"></div>
 </aside>
 
+<aside class="drawer" id="livreurDrawer" aria-label="Devenir livreur">
+  <div class="drawer-head">
+    <h3 style="margin:0;">🛵 Devenir livreur Amarita</h3>
+    <button id="closeLivreurBtn" aria-label="Fermer">✕</button>
+  </div>
+  <div class="drawer-items">
+    <p style="font-size:.85rem; color:#5a6a70; margin-top:0;">Rejoignez le réseau de livreurs indépendants Amarita. Remplissez ce formulaire, notre équipe vous recontacte pour la suite.</p>
+    <form id="livreurForm" class="seller-form">
+      <input type="text" name="name" placeholder="Nom complet" required>
+      <input type="tel" name="phone" placeholder="Numéro de téléphone" required>
+      <select name="vehicule" required>
+        <option value="">Moyen de transport</option>
+        <option value="moto">Moto</option>
+        <option value="velo">Vélo</option>
+        <option value="voiture">Voiture</option>
+        <option value="pied">À pied</option>
+      </select>
+      <input type="text" name="zone" placeholder="Zone (ex: Thiès centre, Dakar Plateau...)" required>
+      <button type="submit" class="checkout-btn">Envoyer ma candidature</button>
+      <p class="seller-error" id="livreurError"></p>
+      <p class="seller-error" id="livreurSuccess" style="color:var(--corail);"></p>
+    </form>
+  </div>
+</aside>
+
 <script>
 const WHATSAPP_NUMBER = "221777663687";
 const WAVE_MERCHANT_LINK = "https://pay.wave.com/m/M_sn_r0XI4iXIkkew/c/sn";
@@ -584,8 +654,8 @@ const API_BASE = "";
 // Doit être identique au "Services ID" créé dans votre compte Apple
 // Developer (Sign in with Apple activé pour ce domaine).
 const APPLE_CLIENT_ID = "com.amarita.web";
-// L'endpoint PayTech reste dans le backend mais n'est plus utilisé par le
-// site pour l'instant (en pause, à réactiver plus tard si besoin).
+// PayTech a été entièrement retiré (frontend et backend) — à recoder plus
+// tard si besoin, une fois les identifiants PayTech disponibles.
 
 // Logo : image lion-logo.jpg (à la racine du dépôt), recadrée en cercle par CSS.
 
@@ -605,6 +675,8 @@ const CATEGORIES = [
   {key:"beaute", label:"Beauté & Bien-être", icon:"🧴", image:"https://images.pexels.com/photos/11284698/pexels-photo-11284698.jpeg?auto=compress&cs=tinysrgb&w=600", color:"var(--bissap)", blurb:"Soins naturels, karité, huiles précieuses."},
   {key:"epicerie", label:"Épicerie & Alimentation", icon:"🌾", image:"https://images.pexels.com/photos/18328392/pexels-photo-18328392.jpeg?auto=compress&cs=tinysrgb&w=600", color:"var(--vert)", blurb:"Riz, thé, jus et produits du terroir."},
   {key:"artisanat", label:"Artisanat & Maison", icon:"🧺", image:"https://images.pexels.com/photos/16819825/pexels-photo-16819825.jpeg?auto=compress&cs=tinysrgb&w=600", color:"var(--mangue)", blurb:"Pièces tissées, tressées et faites main."},
+  {key:"fournitures", label:"Fournitures", icon:"✏️", image:"https://images.pexels.com/photos/7718714/pexels-photo-7718714.jpeg?auto=compress&cs=tinysrgb&w=600", color:"var(--corail)", blurb:"Bureau, école, papeterie et matériel pro."},
+  {key:"immobilier", label:"Immobilier", icon:"🏡", image:"https://images.pexels.com/photos/7587880/pexels-photo-7587880.jpeg?auto=compress&cs=tinysrgb&w=600", color:"var(--indigo)", blurb:"Terrains, appartements et maisons à louer ou vendre.", listing:true},
 ];
 
 // Construit une petite vignette photo pour une catégorie, avec repli automatique
@@ -668,6 +740,11 @@ function renderProducts(){
               <div class="product-body">
                 <h4>${p.name}</h4>
                 <span class="price-tag">${formatFCFA(p.price)}</span>
+                ${c.listing ? `
+                  <div class="product-actions">
+                    <button class="add-btn" style="width:100%;" onclick="contactAboutListing('${p.id}')">📞 Contacter</button>
+                  </div>
+                ` : `
                 <div class="product-actions">
                   <div class="qty-stepper">
                     <button onclick="stepQty('${p.id}',-1)" aria-label="Diminuer">−</button>
@@ -676,6 +753,7 @@ function renderProducts(){
                   </div>
                   <button class="add-btn" onclick="addToCart('${p.id}')">Ajouter</button>
                 </div>
+                `}
               </div>
             </div>
           `).join('')}
@@ -731,6 +809,16 @@ function addToCart(id){
   openCart();
 }
 
+// Immobilier : pas de panier ni de commission, juste une mise en relation
+// directe avec l'annonceur — le modèle "commande + livraison" n'a aucun sens
+// pour un bien immobilier.
+function contactAboutListing(id){
+  const p = productOf(id);
+  if(!p) return;
+  const message = `Bonjour Amarita, je suis intéressé(e) par l'annonce immobilière "${p.name}" (${formatFCFA(p.price)}). Pouvez-vous me mettre en relation avec l'annonceur ?`;
+  goToWhatsApp(message);
+}
+
 function changeCartQty(id, delta){
   const item = cart.find(i => i.id === id);
   if(!item) return;
@@ -752,6 +840,9 @@ function renderCart(){
 
   const count = cart.reduce((s,i)=>s+i.qty, 0);
   countEl.textContent = count;
+  countEl.classList.remove('bump');
+  void countEl.offsetWidth; // force le redémarrage de l'animation CSS
+  countEl.classList.add('bump');
 
   if(cart.length === 0){
     wrap.innerHTML = `<div class="drawer-empty">Votre panier est vide.<br>Ajoutez un produit du marché pour commencer.</div>`;
@@ -791,13 +882,21 @@ function openCart(){
 }
 function openSeller(){
   document.getElementById('cartDrawer').classList.remove('open');
+  document.getElementById('livreurDrawer').classList.remove('open');
   document.getElementById('sellerDrawer').classList.add('open');
   document.getElementById('overlay').classList.add('open');
   renderSellerPanel();
 }
+function openLivreur(){
+  document.getElementById('cartDrawer').classList.remove('open');
+  document.getElementById('sellerDrawer').classList.remove('open');
+  document.getElementById('livreurDrawer').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+}
 function closeAllDrawers(){
   document.getElementById('cartDrawer').classList.remove('open');
   document.getElementById('sellerDrawer').classList.remove('open');
+  document.getElementById('livreurDrawer').classList.remove('open');
   document.getElementById('overlay').classList.remove('open');
 }
 
@@ -1191,9 +1290,35 @@ document.getElementById('closeSellerBtn').addEventListener('click', closeAllDraw
 document.getElementById('overlay').addEventListener('click', closeAllDrawers);
 document.getElementById('checkoutBtn').addEventListener('click', handleCheckout);
 document.querySelectorAll('input[name="paymethod"]').forEach(r => r.addEventListener('change', updateCheckoutUI));
+document.getElementById('openLivreurBtn').addEventListener('click', openLivreur);
+document.getElementById('closeLivreurBtn').addEventListener('click', closeAllDrawers);
+document.getElementById('livreurForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const errorEl = document.getElementById('livreurError');
+  const successEl = document.getElementById('livreurSuccess');
+  errorEl.textContent = ''; successEl.textContent = '';
+  try {
+    const res = await fetch(`${API_BASE}/api/livreurs`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        name: form.name.value.trim(),
+        phone: form.phone.value.trim(),
+        vehicule: form.vehicule.value,
+        zone: form.zone.value.trim()
+      })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || "Erreur lors de l'envoi.");
+    successEl.textContent = "Merci ! Votre candidature a bien été envoyée, on vous recontacte vite.";
+    form.reset();
+  } catch(err){
+    errorEl.textContent = err.message || "Erreur, réessayez.";
+  }
+});
 document.getElementById('footerWa').addEventListener('click', (e) => {
   e.preventDefault();
-  goToWhatsApp("Bonjour Amarita, j'ai une question sur vos produits.");
+  document.getElementById('assistantToggle').click();
 });
 document.getElementById('searchInput').addEventListener('input', (e) => filterProducts(e.target.value));
 
@@ -1202,6 +1327,44 @@ loadSession();
 fetchProducts(); // charge les produits depuis le backend (ou les produits de secours) puis les affiche
 renderCart();
 updateCheckoutUI();
+
+// Carte de la zone de livraison (Thiès / Dakar) — OpenStreetMap via Leaflet,
+// gratuit, sans clé API. La géolocalisation est optionnelle : si le
+// visiteur refuse ou que son navigateur ne la supporte pas, la carte
+// s'affiche quand même, juste centrée sur la zone de service.
+function initDeliveryMap(){
+  if (typeof L === 'undefined') { setTimeout(initDeliveryMap, 300); return; }
+  const map = L.map('deliveryMap').setView([14.73, -17.15], 9);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 18
+  }).addTo(map);
+  L.circle([14.7833, -16.9167], { radius: 15000, color: '#8B2FE0', fillOpacity: 0.15 }).addTo(map).bindPopup('Zone Thiès');
+  L.circle([14.6928, -17.4467], { radius: 15000, color: '#8B2FE0', fillOpacity: 0.15 }).addTo(map).bindPopup('Zone Dakar');
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        L.marker([latitude, longitude]).addTo(map).bindPopup('Vous êtes ici').openPopup();
+        map.setView([latitude, longitude], 11);
+      },
+      () => { /* géolocalisation refusée ou indisponible — la carte reste affichée telle quelle */ }
+    );
+  }
+}
+initDeliveryMap();
+
+// Fait apparaître en fondu les sections quand elles entrent dans l'écran.
+const revealObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      revealObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
 </script>
 
 <button id="assistantToggle" class="assistant-fab" aria-label="Ouvrir l'assistant Amarita">💬</button>
