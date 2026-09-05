@@ -109,7 +109,7 @@ async function connectWithRetry(uri, attempts = 5, delayMs = 4000){
 
 async function start(){
   const client = await connectWithRetry(MONGODB_URI);
-  const db = client.db('amarita');
+  const db = client.db('Amarita');
   const sellers = db.collection('sellers');
   const products = db.collection('products');
   const orders = db.collection('orders');
