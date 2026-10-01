@@ -11,17 +11,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Amarita — Le marché de tout</title>
-<meta name="description" content="Amarita, le marché en ligne de Dakar : mode, beauté, épicerie et artisanat. Prix fixes, paiement par WhatsApp, Wave ou Orange Money, livraison assurée par notre service client.">
+<meta name="description" content="Amarita, le marché en ligne au Sénégal : mode, beauté, épicerie et artisanat. Prix fixes, paiement par WhatsApp, Wave ou Orange Money, livraison assurée par notre service client.">
 <meta name="theme-color" content="#2D1449">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="fr_FR">
 <meta property="og:title" content="Amarita — Le marché de tout">
-<meta property="og:description" content="Mode, beauté, épicerie, artisanat — le marché de Dakar livré chez vous.">
-<meta property="og:url" content="https://votre-domaine.sn">
+<meta property="og:description" content="Mode, beauté, épicerie, artisanat — le marché sénégalais livré chez vous.">
+<meta property="og:url" content="https://amarita.onrender.com">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8D%83%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&family=Work+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<script type="text/javascript" src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js" defer></script>
+<script type="text/javascript" src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 <style>
@@ -117,9 +117,10 @@
   /* HEADER */
   header{
     position:sticky; top:0; z-index:40;
-    background:var(--indigo);
-    border-bottom:2px solid var(--mangue);
-    box-shadow:0 2px 20px rgba(139,47,224,0.25);
+    background:rgba(23,11,38,0.82);
+    backdrop-filter:blur(16px) saturate(160%);
+    -webkit-backdrop-filter:blur(16px) saturate(160%);
+    border-bottom:1px solid rgba(232,185,35,0.35);
   }
   .header-inner{
     display:flex; align-items:center; gap:20px;
@@ -190,10 +191,29 @@
     background:var(--indigo);
     color:var(--blanc);
     padding-top:18px;
+    position:relative;
+    overflow:hidden;
     background-image:
       radial-gradient(ellipse 80% 60% at 50% 0%, rgba(232,185,35,0.16), transparent 70%),
       radial-gradient(ellipse 60% 50% at 85% 100%, rgba(139,47,224,0.25), transparent 70%);
     background-repeat: no-repeat;
+  }
+  .hero::before{
+    content:"";
+    position:absolute; inset:-20%;
+    background:
+      radial-gradient(circle at 20% 30%, rgba(232,185,35,0.22), transparent 45%),
+      radial-gradient(circle at 80% 20%, rgba(139,47,224,0.28), transparent 45%),
+      radial-gradient(circle at 60% 80%, rgba(45,20,73,0.35), transparent 50%);
+    filter:blur(40px);
+    animation:meshDrift 16s ease-in-out infinite alternate;
+    z-index:0;
+    pointer-events:none;
+  }
+  .hero > *{position:relative; z-index:1;}
+  @keyframes meshDrift{
+    0%{transform:translate(0,0) scale(1);}
+    100%{transform:translate(-4%,3%) scale(1.08);}
   }
   .hero-divider{
     max-width:280px; height:1px; margin:14px auto 6px;
@@ -212,15 +232,23 @@
   .hero-content h1{
     font-size:clamp(2.1rem, 5vw, 3.4rem);
     max-width:14ch; margin:0 auto .35em;
-    text-shadow:0 0 24px rgba(232,185,35,0.45);
+    letter-spacing:-0.02em;
+  }
+  .gradient-text{
+    background:linear-gradient(100deg, var(--blanc) 15%, var(--mangue) 50%, #C9A6F5 85%);
+    -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent; color:transparent;
+    text-shadow:none;
+    filter:drop-shadow(0 0 22px rgba(232,185,35,0.35));
   }
   .hero-content p{
     max-width:44ch; margin:0 auto 28px; opacity:.85; font-size:1.05rem;
   }
   .hero-search{
     max-width:520px; margin:0 auto;
-    display:flex; background:var(--blanc); border-radius:var(--radius-pill);
-    padding:6px; box-shadow:var(--shadow);
+    display:flex; background:rgba(252,248,237,0.95); border-radius:var(--radius-pill);
+    padding:6px; box-shadow:0 0 0 1px rgba(232,185,35,0.4), 0 8px 32px rgba(139,47,224,0.35);
+    backdrop-filter:blur(8px);
   }
   .hero-search input{
     flex:1; border:none; outline:none; background:transparent;
@@ -246,29 +274,48 @@
     text-transform:uppercase; color:var(--corail); display:block; margin-bottom:6px;
   }
   #categories-grid{
-    display:grid; grid-template-columns:repeat(4,1fr); gap:18px;
+    display:grid; grid-template-columns:repeat(4,1fr);
+    grid-auto-rows:minmax(150px,auto);
+    gap:18px;
   }
+  #categories-grid .cat-card:nth-child(1){grid-column:span 2; grid-row:span 2;}
+  #categories-grid .cat-card:nth-child(2){grid-column:span 2; grid-row:span 1;}
+  #categories-grid .cat-card:nth-child(3){grid-column:span 1; grid-row:span 1;}
+  #categories-grid .cat-card:nth-child(4){grid-column:span 1; grid-row:span 1;}
+  #categories-grid .cat-card:nth-child(5){grid-column:span 2; grid-row:span 1;}
+  #categories-grid .cat-card:nth-child(6){grid-column:span 2; grid-row:span 1;}
   .cat-card{
-    background:var(--blanc);
+    position:relative; overflow:hidden;
+    background:var(--indigo);
     border-radius:var(--radius);
-    padding:22px 18px;
+    padding:0;
     text-align:left;
     border:none;
-    border-top:5px solid var(--cat-color);
     box-shadow:var(--shadow);
     cursor:pointer;
-    transition:transform var(--transition-fast);
+    min-height:150px;
+    transition:transform var(--transition-fast), box-shadow var(--transition-fast);
   }
-  .cat-card:hover{transform:translateY(-4px);}
-  .cat-card .icon{
-    font-size:1.8rem; display:inline-flex; position:relative; overflow:hidden;
-    width:48px; height:48px; align-items:center; justify-content:center;
-    background:color-mix(in srgb, var(--cat-color) 18%, white);
-    border-radius:var(--radius-circle); margin-bottom:12px;
+  .cat-card:hover{transform:translateY(-4px); box-shadow:0 14px 32px rgba(45,20,73,0.35);}
+  .cat-card-bg{position:absolute; inset:0;}
+  .cat-card-bg img{width:100%; height:100%; object-fit:cover; display:block;}
+  .cat-card-emoji{
+    display:none; position:absolute; inset:0; align-items:center; justify-content:center;
+    font-size:2.6rem; background:color-mix(in srgb, var(--cat-color) 35%, var(--indigo));
   }
-  .cat-card .icon img{width:100%; height:100%; object-fit:cover; border-radius:inherit;}
-  .cat-card h3{font-size:1.05rem; margin-bottom:4px;}
-  .cat-card p{margin:0; font-size:.85rem; color:#4c5a5f;}
+  .cat-card.img-failed .cat-card-emoji{display:flex;}
+  .cat-card-overlay{
+    position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(23,11,38,0.08) 0%, rgba(23,11,38,0.9) 100%);
+  }
+  .cat-card-text{
+    position:relative; z-index:1; height:100%; padding:16px 18px;
+    display:flex; flex-direction:column; justify-content:flex-end;
+  }
+  .cat-card-text h3{color:#fff; font-size:1.05rem; margin-bottom:4px;}
+  .cat-card-text p{margin:0; font-size:.85rem; color:rgba(255,255,255,0.82);}
+  #categories-grid .cat-card:nth-child(1) .cat-card-text h3{font-size:1.5rem;}
+  #categories-grid .cat-card:nth-child(1) .cat-card-text{padding:26px;}
   .cat-thumb{
     display:inline-flex; width:26px; height:26px; border-radius:8px;
     overflow:hidden; vertical-align:middle; margin-right:6px;
@@ -290,7 +337,10 @@
     background:var(--blanc); border-radius:var(--radius);
     box-shadow:var(--shadow); overflow:hidden;
     display:flex; flex-direction:column;
+    border:1px solid transparent;
+    transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease;
   }
+  .product-card:hover{border-color:rgba(139,47,224,0.35);}
   .product-media{
     position:relative;
     height:120px; display:flex; align-items:center; justify-content:center;
@@ -445,6 +495,8 @@
   @media (max-width:860px){
     nav.catnav{display:none;}
     #categories-grid{grid-template-columns:repeat(2,1fr);}
+    #categories-grid .cat-card{grid-row:span 1 !important;}
+    #categories-grid .cat-card:nth-child(1){grid-column:span 2 !important; min-height:200px;}
     .products-grid{grid-template-columns:repeat(2,1fr);}
     .trust-inner{grid-template-columns:1fr;}
   }
@@ -519,8 +571,8 @@
 <div class="hero" id="top">
   <div class="hero-divider" aria-hidden="true"></div>
   <div class="hero-content">
-    <h1>Le marché pousse aussi en ligne</h1>
-    <p>Mode, beauté, épicerie, artisanat, fournitures, immobilier — tout ce que le marché fait pousser, à portée de main.</p>
+    <h1 class="gradient-text">Tout le marché, réuni au même endroit</h1>
+    <p>Mode, beauté, épicerie, artisanat, fournitures, immobilier — commandez facilement, livré près de chez vous.</p>
     <form class="hero-search" onsubmit="event.preventDefault(); document.getElementById('searchInput').value=this.q.value; filterProducts(this.q.value); document.getElementById('produits').scrollIntoView({behavior:'smooth'});">
       <input name="q" type="text" placeholder="Que cherchez-vous aujourd'hui ?">
       <button type="submit">Chercher</button>
@@ -577,11 +629,13 @@
   <div class="wrap footer-grid">
     <div>
       <div class="logo">Amar<span class="leaf-i">ı</span><span class="accent">ta</span></div>
-      <p style="max-width:32ch;">Le marché, tel qu'il devrait être en ligne : simple, chaleureux, sans surprise.</p>
+      <p style="max-width:32ch;">Votre marché en ligne à Thiès et Dakar : simple, rapide, fiable.</p>
       <a class="wa-link" href="#" id="footerWa">🤖 Service Client IA</a>
+      <a class="wa-link" href="#" id="footerInfluenceur" style="background:var(--mangue); color:var(--encre); margin-left:8px;">⭐ Devenir influenceur</a>
     </div>
     <div>
       <p>© 2026 Amarita. Tous droits réservés.</p>
+      <p style="margin-top:6px;"><a href="/confidentialite.html" style="color:inherit;">Confidentialité</a> · <a href="/conditions.html" style="color:inherit;">Conditions d'utilisation</a></p>
       <p>Dakar, Sénégal</p>
     </div>
   </div>
@@ -600,6 +654,7 @@
       <label class="pay-opt"><input type="radio" name="paymethod" value="whatsapp" checked><span>WhatsApp</span></label>
       <label class="pay-opt"><input type="radio" name="paymethod" value="wave"><span>Wave</span></label>
       <label class="pay-opt"><input type="radio" name="paymethod" value="orange"><span>Orange Money</span></label>
+      <label class="pay-opt"><input type="radio" name="paymethod" value="paytech"><span>Carte / Mobile Money</span></label>
     </div>
     <div id="cardNote" class="card-note"></div>
     <p style="font-size:.78rem; color:#5a6a70; margin:6px 0 0;">Prix fixes, aucune négociation. Livraison assurée par notre service client Amarita.</p>
@@ -640,6 +695,36 @@
   </div>
 </aside>
 
+<aside class="drawer" id="influenceurDrawer" aria-label="Devenir influenceur">
+  <div class="drawer-head">
+    <h3 style="margin:0;">⭐ Programme influenceur</h3>
+    <button id="closeInfluenceurBtn" aria-label="Fermer">✕</button>
+  </div>
+  <div class="drawer-items">
+    <p style="font-size:.85rem; color:#5a6a70; margin-top:0;">Partagez votre lien, touchez une commission sur chaque vente réalisée grâce à vous — automatiquement.</p>
+    <form id="influenceurForm" class="seller-form">
+      <input type="text" name="name" placeholder="Nom complet" required>
+      <input type="tel" name="phone" placeholder="Numéro de téléphone" required>
+      <button type="submit" class="checkout-btn">Obtenir mon lien</button>
+      <p class="seller-error" id="influenceurError"></p>
+    </form>
+    <div id="influenceurResult" style="display:none; margin-top:12px;">
+      <p style="font-size:.85rem; margin-bottom:4px;">Votre lien à partager :</p>
+      <div style="display:flex; gap:6px;">
+        <input type="text" id="influenceurLink" readonly style="flex:1; padding:8px; border-radius:8px; border:1px solid #ddd; font-size:.8rem;">
+        <button type="button" id="copyInfluenceurLink" class="checkout-btn" style="width:auto; padding:8px 14px;">Copier</button>
+      </div>
+    </div>
+
+    <div class="seller-divider">Déjà inscrit ?</div>
+    <form id="influenceurLookupForm" class="seller-form">
+      <input type="text" name="code" placeholder="Votre code (ex: A3F9C1)" required style="text-transform:uppercase;">
+      <button type="submit" class="checkout-btn" style="background:var(--vert);">Voir mes gains</button>
+    </form>
+    <div id="influenceurGains" style="font-size:.85rem;"></div>
+  </div>
+</aside>
+
 <script>
 const WHATSAPP_NUMBER = "221777663687";
 const WAVE_MERCHANT_LINK = "https://pay.wave.com/m/M_sn_r0XI4iXIkkew/c/sn";
@@ -654,8 +739,8 @@ const API_BASE = "";
 // Doit être identique au "Services ID" créé dans votre compte Apple
 // Developer (Sign in with Apple activé pour ce domaine).
 const APPLE_CLIENT_ID = "com.amarita.web";
-// PayTech a été entièrement retiré (frontend et backend) — à recoder plus
-// tard si besoin, une fois les identifiants PayTech disponibles.
+// PayTech est réintégré : encaisse (carte/mobile money) ET reverse
+// automatiquement sa part au vendeur via l'API Transfer (voir amarita-backend.js).
 
 // Logo : image lion-logo.jpg (à la racine du dépôt), recadrée en cercle par CSS.
 
@@ -691,6 +776,12 @@ function catThumb(c, cls){
 let PRODUCTS = []; // rempli par fetchProducts() au chargement de la page
 let session = null; // { token, name, id } — compte vendeur connecté
 let cart = []; // {id, qty}
+// Code de parrainage influenceur : capturé une fois depuis l'URL (?ref=CODE),
+// puis gardé pour toute la visite (même si le client navigue sans le code
+// dans l'URL sur les pages suivantes).
+const urlParams = new URLSearchParams(window.location.search);
+let affiliateCode = urlParams.get('ref') || sessionStorage.getItem('amarita_ref') || null;
+if (affiliateCode) { try { sessionStorage.setItem('amarita_ref', affiliateCode); } catch {} }
 
 function formatFCFA(n){
   return n.toLocaleString('fr-FR') + " FCFA";
@@ -702,9 +793,15 @@ function renderCategories(){
   const grid = document.getElementById('categories-grid');
   grid.innerHTML = CATEGORIES.map(c => `
     <button class="cat-card" style="--cat-color:${c.color}" onclick="document.getElementById('${c.key}').scrollIntoView({behavior:'smooth'})">
-      ${catThumb(c, 'icon')}
-      <h3>${c.label}</h3>
-      <p>${c.blurb}</p>
+      <span class="cat-card-bg">
+        <img src="${c.image}" alt="" onerror="this.remove(); this.parentElement.parentElement.classList.add('img-failed');">
+      </span>
+      <span class="cat-card-emoji">${c.icon}</span>
+      <span class="cat-card-overlay"></span>
+      <span class="cat-card-text">
+        <h3>${c.label}</h3>
+        <p>${c.blurb}</p>
+      </span>
     </button>
   `).join('');
 }
@@ -815,7 +912,7 @@ function addToCart(id){
 function contactAboutListing(id){
   const p = productOf(id);
   if(!p) return;
-  const message = `Bonjour Amarita, je suis intéressé(e) par l'annonce immobilière "${p.name}" (${formatFCFA(p.price)}). Pouvez-vous me mettre en relation avec l'annonceur ?`;
+  const message = `Bonjour Amarita, je suis intéressé(e) par l'annonce immobilière «\u00a0${p.name}\u00a0» (${formatFCFA(p.price)}). Pouvez-vous me mettre en relation avec l'annonceur ?`;
   goToWhatsApp(message);
 }
 
@@ -883,6 +980,7 @@ function openCart(){
 function openSeller(){
   document.getElementById('cartDrawer').classList.remove('open');
   document.getElementById('livreurDrawer').classList.remove('open');
+  document.getElementById('influenceurDrawer').classList.remove('open');
   document.getElementById('sellerDrawer').classList.add('open');
   document.getElementById('overlay').classList.add('open');
   renderSellerPanel();
@@ -890,13 +988,22 @@ function openSeller(){
 function openLivreur(){
   document.getElementById('cartDrawer').classList.remove('open');
   document.getElementById('sellerDrawer').classList.remove('open');
+  document.getElementById('influenceurDrawer').classList.remove('open');
   document.getElementById('livreurDrawer').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+}
+function openInfluenceur(){
+  document.getElementById('cartDrawer').classList.remove('open');
+  document.getElementById('sellerDrawer').classList.remove('open');
+  document.getElementById('livreurDrawer').classList.remove('open');
+  document.getElementById('influenceurDrawer').classList.add('open');
   document.getElementById('overlay').classList.add('open');
 }
 function closeAllDrawers(){
   document.getElementById('cartDrawer').classList.remove('open');
   document.getElementById('sellerDrawer').classList.remove('open');
   document.getElementById('livreurDrawer').classList.remove('open');
+  document.getElementById('influenceurDrawer').classList.remove('open');
   document.getElementById('overlay').classList.remove('open');
 }
 
@@ -922,6 +1029,10 @@ function renderSellerPanel(){
         <input type="text" name="name" placeholder="Nom de la boutique" required>
         <input type="email" name="email" placeholder="Adresse e-mail" required>
         <input type="password" name="password" placeholder="Mot de passe (6 caractères min.)" required minlength="6">
+        <select name="sellerType" required>
+          <option value="standard">Vendeur détail (commission 10%)</option>
+          <option value="grossiste">Vendeur grossiste / gros volumes (commission 3%)</option>
+        </select>
         <button type="submit" class="checkout-btn">Créer mon compte vendeur</button>
         <p class="seller-error" id="signupError"></p>
       </form>
@@ -957,16 +1068,64 @@ function renderSellerPanel(){
         <button type="submit" class="checkout-btn">Ajouter ce produit</button>
         <p class="seller-error" id="addProductError"></p>
       </form>
+      <h4 style="margin:20px 0 8px; font-family:'Bricolage Grotesque';">Versement automatique</h4>
+      <p style="font-size:.8rem; color:#5a6a70; margin-top:0;">Renseignez votre numéro pour être payé automatiquement à chaque vente réglée par carte/mobile money (PayTech). Sans ça, votre dû reste visible ci-dessous mais versé à la main.</p>
+      <form id="payoutForm" class="seller-form">
+        <input type="tel" name="payoutPhone" placeholder="Numéro (ex: 77XXXXXXX)" required>
+        <select name="payoutService" required>
+          <option value="Wave Senegal">Wave</option>
+          <option value="Orange Money Senegal">Orange Money</option>
+          <option value="Free Money Senegal">Free Money</option>
+        </select>
+        <button type="submit" class="checkout-btn" style="background:var(--vert);">Enregistrer</button>
+        <p class="seller-error" id="payoutError"></p>
+        <p class="seller-error" id="payoutSuccess" style="color:var(--corail);"></p>
+      </form>
       <h4 style="margin:20px 0 8px; font-family:'Bricolage Grotesque';">Mes produits</h4>
       <div id="myProductsList"></div>
-      <h4 style="margin:20px 0 8px; font-family:'Bricolage Grotesque';">Mes commandes (commission Amarita : 10%)</h4>
+      <h4 style="margin:20px 0 8px; font-family:'Bricolage Grotesque';">Mes commandes</h4>
       <div id="myOrdersList"></div>
       <button type="button" id="logoutBtn" class="di-remove" style="margin-top:16px;">Se déconnecter</button>
     `;
     document.getElementById('addProductForm').addEventListener('submit', handleAddProduct);
+    document.getElementById('payoutForm').addEventListener('submit', handlePayoutUpdate);
     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
     loadMyProducts();
     loadMyOrders();
+    loadPayoutInfo();
+  }
+}
+
+async function loadPayoutInfo(){
+  try {
+    const res = await fetch(`${API_BASE}/api/sellers/me`, {
+      headers: { 'Authorization': `Bearer ${session.token}` }
+    });
+    const data = await res.json();
+    if(!res.ok) return;
+    const form = document.getElementById('payoutForm');
+    if(data.seller.payoutPhone) form.payoutPhone.value = data.seller.payoutPhone;
+    if(data.seller.payoutService) form.payoutService.value = data.seller.payoutService;
+  } catch { /* pas grave, le vendeur peut simplement renseigner ses infos */ }
+}
+
+async function handlePayoutUpdate(e){
+  e.preventDefault();
+  const form = e.target;
+  const errorEl = document.getElementById('payoutError');
+  const successEl = document.getElementById('payoutSuccess');
+  errorEl.textContent = ''; successEl.textContent = '';
+  try {
+    const res = await fetch(`${API_BASE}/api/sellers/payout`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.token}` },
+      body: JSON.stringify({ payoutPhone: form.payoutPhone.value.trim(), payoutService: form.payoutService.value })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || "Erreur lors de l'enregistrement.");
+    successEl.textContent = "Enregistré — vos prochaines ventes PayTech seront versées automatiquement.";
+  } catch(err){
+    errorEl.textContent = err.message || "Erreur, réessayez.";
   }
 }
 
@@ -1002,7 +1161,8 @@ async function handleSignup(e){
       body: JSON.stringify({
         name: form.name.value.trim(),
         email: form.email.value.trim(),
-        password: form.password.value
+        password: form.password.value,
+        sellerType: form.sellerType.value
       })
     });
     const data = await res.json();
@@ -1133,14 +1293,24 @@ async function loadMyOrders(){
       list.innerHTML = `<p style="font-size:.85rem; color:#5a6a70;">Aucune commande pour l'instant.</p>`;
       return;
     }
-    list.innerHTML = data.orders.map(o => `
+    list.innerHTML = data.orders.map(o => {
+      const statusLabels = {
+        verse: '✅ Versé automatiquement',
+        en_cours: '⏳ Versement en cours',
+        echec: '⚠️ Échec du versement — contactez Amarita',
+        non_verse: '📋 À verser manuellement (pas de PayTech ou pas de numéro renseigné)'
+      };
+      const payoutLabel = statusLabels[o.payoutStatus] || statusLabels.non_verse;
+      return `
       <div class="drawer-item">
         <div style="flex:1;">
           <div class="di-name">${new Date(o.createdAt).toLocaleDateString('fr-FR')} — ${o.status}</div>
-          <div class="di-price">Part vendeur (90%) : ${formatFCFA(o.part.amountDue)}</div>
+          <div class="di-price">Votre part : ${formatFCFA(o.part.amountDue)}</div>
+          <div style="font-size:.78rem; color:#5a6a70;">${payoutLabel}</div>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   } catch {
     list.innerHTML = `<p style="font-size:.85rem; color:#5a6a70;">Le serveur vendeur n'est pas encore accessible.</p>`;
   }
@@ -1227,6 +1397,10 @@ function updateCheckoutUI(){
   } else if(method === 'wave'){
     btn.textContent = '🌊 Payer avec Wave';
     note.classList.remove('visible');
+  } else if(method === 'paytech'){
+    btn.textContent = '💳 Payer en ligne';
+    note.textContent = "Carte bancaire, Wave, Orange Money ou Free Money — via PayTech, paiement sécurisé.";
+    note.classList.add('visible');
   } else {
     btn.textContent = '🍊 Payer avec Orange Money';
     note.textContent = ORANGE_MONEY_NUMBER
@@ -1241,6 +1415,23 @@ function goToOrange(amount){
   goToWhatsApp(message);
 }
 
+async function goToPaytech(orderId){
+  try {
+    const res = await fetch(`${API_BASE}/api/paytech/request-payment`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ orderId })
+    });
+    const data = await res.json();
+    if(!res.ok || !data.redirect_url) throw new Error(data.error || "PayTech indisponible.");
+    window.location.href = data.redirect_url;
+  } catch(err){
+    const note = document.getElementById('cardNote');
+    note.textContent = "Paiement en ligne indisponible pour l'instant — essayez WhatsApp, Wave ou Orange Money.";
+    note.classList.add('visible');
+  }
+}
+
 // Enregistre la commande côté serveur AVANT le paiement, pour que la
 // commission (10%) et la part due à chaque vendeur (90%) soient calculées
 // et gardées en mémoire — même si le paiement lui-même (WhatsApp/Wave/Orange)
@@ -1252,24 +1443,31 @@ async function recordOrder(paymentMethod){
     const res = await fetch(`${API_BASE}/api/orders`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ items, paymentMethod })
+      body: JSON.stringify({ items, paymentMethod, affiliateCode })
     });
     const data = await res.json();
-    if(res.ok) return { total: data.total };
+    if(res.ok) return { total: data.total, orderId: data.orderId };
   } catch { /* pas grave, on continue avec le total calculé côté client */ }
-  return { total: cartTotal() };
+  return { total: cartTotal(), orderId: null };
 }
 
 async function handleCheckout(){
   const method = selectedPayMethod();
   const btn = document.getElementById('checkoutBtn');
   btn.disabled = true;
-  const { total } = await recordOrder(method);
+  const { total, orderId } = await recordOrder(method);
   btn.disabled = false;
   if(method === 'whatsapp'){
     goToWhatsApp(buildWhatsAppMessage());
   } else if(method === 'wave'){
     goToWave(total);
+  } else if(method === 'paytech'){
+    if(!orderId){
+      document.getElementById('cardNote').textContent = "Impossible de préparer le paiement en ligne pour l'instant — essayez WhatsApp, Wave ou Orange Money.";
+      document.getElementById('cardNote').classList.add('visible');
+      return;
+    }
+    goToPaytech(orderId);
   } else {
     goToOrange(total);
   }
@@ -1319,6 +1517,49 @@ document.getElementById('livreurForm').addEventListener('submit', async (e) => {
 document.getElementById('footerWa').addEventListener('click', (e) => {
   e.preventDefault();
   document.getElementById('assistantToggle').click();
+});
+document.getElementById('footerInfluenceur').addEventListener('click', (e) => {
+  e.preventDefault();
+  openInfluenceur();
+});
+document.getElementById('closeInfluenceurBtn').addEventListener('click', closeAllDrawers);
+document.getElementById('influenceurForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const errorEl = document.getElementById('influenceurError');
+  errorEl.textContent = '';
+  try {
+    const res = await fetch(`${API_BASE}/api/influenceurs`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name: form.name.value.trim(), phone: form.phone.value.trim() })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || "Erreur lors de l'inscription.");
+    document.getElementById('influenceurLink').value = data.link;
+    document.getElementById('influenceurResult').style.display = 'block';
+    form.reset();
+  } catch(err){
+    errorEl.textContent = err.message || "Erreur, réessayez.";
+  }
+});
+document.getElementById('copyInfluenceurLink').addEventListener('click', () => {
+  const input = document.getElementById('influenceurLink');
+  input.select();
+  navigator.clipboard?.writeText(input.value).catch(() => {});
+});
+document.getElementById('influenceurLookupForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const code = e.target.code.value.trim().toUpperCase();
+  const gainsEl = document.getElementById('influenceurGains');
+  gainsEl.textContent = 'Chargement...';
+  try {
+    const res = await fetch(`${API_BASE}/api/influenceurs/${code}/gains`);
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || "Code introuvable.");
+    gainsEl.innerHTML = `<p><strong>${data.name}</strong> — ${data.nbCommandes} commande(s)<br>Total gagné : <strong>${formatFCFA(data.totalGains)}</strong></p>`;
+  } catch(err){
+    gainsEl.textContent = err.message || "Erreur, réessayez.";
+  }
 });
 document.getElementById('searchInput').addEventListener('input', (e) => filterProducts(e.target.value));
 
@@ -1396,7 +1637,7 @@ document.getElementById('assistantToggle').addEventListener('click', () => {
   const opening = panel.hasAttribute('hidden');
   if(opening) panel.removeAttribute('hidden'); else panel.setAttribute('hidden','');
   if(opening && assistantMessagesEl.children.length === 0){
-    addAssistantMessage('assistant', "Bonjour 👋 Dites-moi ce que vous cherchez (ex. \"une robe wax pour un mariage\") et je vous propose des produits Amarita.");
+    addAssistantMessage('assistant', "Bonjour 👋 Dites-moi ce que vous cherchez (ex. «\u00a0une robe wax pour un mariage\u00a0») et je vous propose des produits Amarita.");
   }
 });
 document.getElementById('assistantClose').addEventListener('click', () => {

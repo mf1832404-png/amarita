@@ -64,7 +64,9 @@ app.use(express.urlencoded({ extended: true })); // les notifications IPN PayTec
 // directement à la racine du site.
 app.use(express.static(__dirname, { index: 'index.html' }));
 
-const JWT_SECRET = process.env.JWT_SECRET || "change-moi-absolument-avant-de-publier";
+const JWT_SECRET = (process.env.JWT_SECRET || "").trim();
+if (!JWT_SECRET && process.env.NODE_ENV === "production") throw new Error("JWT_SECRET est obligatoire en production.");
+if (!JWT_SECRET) console.warn("⚠️ JWT_SECRET absent : utilisez une vraie valeur avant tout déploiement public.");
 // .trim() est important : coller une variable d'environnement depuis un
 // clavier de téléphone laisse parfois un espace ou un retour à la ligne
 // invisible au début/à la fin, ce qui suffit à faire échouer l'authentification
@@ -166,7 +168,8 @@ async function start(){
 
   app.post('/api/auth/signup', async (req, res) => {
     try {
-      const { name, email, password, sellerType, payoutPhone, payoutService } = req.body;
+      let { name, email, password, sellerType, payoutPhone, payoutService } = req.body;
+      email = String(email || "").trim().toLowerCase();
       if (!name || !email || !password) {
         return res.status(400).json({ error: "Nom, e-mail et mot de passe requis." });
       }
@@ -202,7 +205,8 @@ async function start(){
 
   app.post('/api/auth/login', async (req, res) => {
     try {
-      const { email, password } = req.body;
+      let { email, password } = req.body;
+      email = String(email || "").trim().toLowerCase();
       const seller = await sellers.findOne({ email });
       if (!seller || seller.authProvider === 'apple' || !bcrypt.compareSync(password || '', seller.passwordHash || '')) {
         return res.status(401).json({ error: "E-mail ou mot de passe incorrect." });
@@ -234,7 +238,7 @@ async function start(){
         console.error("Vérification Apple échouée :", e.message);
         return res.status(401).json({ error: "Connexion Apple invalide ou expirée." });
       }
-      const email = applePayload.email;
+      const email = String(applePayload.email || "").trim().toLowerCase();
       if (!email) {
         return res.status(400).json({ error: "Apple n'a pas transmis d'e-mail pour ce compte." });
       }
@@ -274,8 +278,9 @@ async function start(){
     try {
       const { name, price, cat, icon, image } = req.body;
       const allowedCats = ["mode", "beaute", "epicerie", "artisanat", "fournitures", "immobilier"];
-      if (!name || !price || !allowedCats.includes(cat)) {
-        return res.status(400).json({ error: "Nom, prix et catégorie valide requis." });
+      const numericPrice = Number(price);
+      if (!String(name || "").trim() || !Number.isFinite(numericPrice) || numericPrice <= 0 || !allowedCats.includes(cat)) {
+        return res.status(400).json({ error: "Nom, prix positif et catégorie valide requis." });
       }
       if (image && !image.startsWith('data:image/')) {
         return res.status(400).json({ error: "Format de photo invalide." });
@@ -285,7 +290,7 @@ async function start(){
         sellerId: req.seller.id,
         sellerName: req.seller.name,
         name,
-        price: Number(price),
+        price: Math.round(numericPrice),
         cat,
         icon: icon || "🛍️",
         image: image || null,
@@ -467,6 +472,9 @@ async function start(){
 
       if (orderItems.length === 0) {
         return res.status(400).json({ error: "Aucun produit valide dans ce panier." });
+      }
+      if (!Number.isFinite(total) || total <= 0) {
+        return res.status(400).json({ error: "Montant de commande invalide." });
       }
 
       // Le taux de base dépend du type de chaque vendeur (grossiste 3% / détail 10%).
@@ -650,6 +658,11 @@ async function start(){
 
       const order = await orders.findOne({ id: ref_command });
       if (!order) return res.status(200).send("IPN OK (commande introuvable, ignorée)");
+      const callbackAmount = Number(item_price);
+      if (!Number.isFinite(callbackAmount) || callbackAmount !== Number(order.total)) {
+        console.error("IPN PayTech refusée : montant différent de la commande", { orderId: ref_command, expected: order.total, received: item_price });
+        return res.status(400).send("IPN KO — montant invalide");
+      }
 
       if (type_event === 'sale_complete') {
         await orders.updateOne({ id: ref_command }, { $set: { paymentStatus: 'payee' } });
