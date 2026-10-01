@@ -6,19 +6,30 @@
  *   2. Gère les comptes vendeurs (inscription / connexion par e-mail,
  *      ou connexion avec Apple)
  *   3. Gère l'ajout, la liste et la suppression de produits par les vendeurs
- *   4. Enregistre chaque commande et calcule la commission Amarita (10%)
- *      et la part due à chaque vendeur (90%)
- *   5. Paiement par Wave et Orange Money (liens/instructions simples, gérés
- *      côté site — aucune clé API requise pour ces deux-là)
+ *   4. Enregistre chaque commande et calcule la commission Amarita (10%
+ *      détail / 3% grossiste) et la part due à chaque vendeur
+ *   5. Paiement par Wave, Orange Money (liens/instructions simples) ou
+ *      PayTech (carte, Orange Money, Wave, Free Money — unifiés)
+ *   6. Si le paiement passe par PayTech : reverse AUTOMATIQUEMENT à chaque
+ *      vendeur sa part, par virement mobile money (API Transfer PayTech).
+ *      Pour Wave/Orange/WhatsApp (hors PayTech), le versement reste manuel :
+ *      l'argent ne transite jamais par le solde PayTech d'Amarita dans ce cas.
  *
  * Les données (vendeurs, produits, commandes) sont stockées dans
  * MongoDB Atlas, gratuit et persistant.
  *
  * Installation :
  *   npm install
- *   MONGODB_URI=... JWT_SECRET=... APPLE_CLIENT_ID=... ANTHROPIC_API_KEY=... npm start
+ *   MONGODB_URI=... JWT_SECRET=... APPLE_CLIENT_ID=... ANTHROPIC_API_KEY=... PAYTECH_API_KEY=... PAYTECH_API_SECRET=... PAYTECH_ENV=... BASE_URL=... npm start
  *
  * (nécessite Node.js 18 ou plus récent, pour que "fetch" soit disponible nativement)
+ *
+ * PAYTECH_API_KEY / PAYTECH_API_SECRET : à récupérer sur paytech.sn après
+ * inscription (Dashboard → Paramètres → API). Le mode production (vrais
+ * paiements) demande une validation manuelle par PayTech : envoyer NINEA,
+ * pièce d'identité, registre de commerce à contact@paytech.sn. Sans cette
+ * validation, seul PAYTECH_ENV=test fonctionne (montant débité aléatoire
+ * entre 100 et 150 FCFA, jamais le vrai montant — normal, pas un bug).
  *
  * APPLE_CLIENT_ID : l'identifiant "Services ID" créé dans votre compte
  * Apple Developer (ex: com.amarita.web), avec "Sign in with Apple" activé
@@ -42,7 +53,12 @@ const { MongoClient } = require('mongodb');
 const appleSignin = require('apple-signin-auth');
 
 const app = express();
+// Render fait transiter les requêtes via un proxy en HTTPS→HTTP ; sans cette
+// ligne, req.protocol renverrait "http" même en production, et PayTech
+// refuse les URL de notification qui ne sont pas en https.
+app.set('trust proxy', 1);
 app.use(express.json({ limit: '6mb' })); // les photos de produits arrivent en base64 dans le JSON
+app.use(express.urlencoded({ extended: true })); // les notifications IPN PayTech arrivent en formulaire classique
 
 // Sert index.html (et tout autre fichier posé dans ce même dossier)
 // directement à la racine du site.
@@ -58,7 +74,27 @@ const MONGODB_URI = (process.env.MONGODB_URI || "").trim();
 // → Identifiers → +  → Services IDs), avec "Sign in with Apple" activé pour ce domaine.
 const APPLE_CLIENT_ID = process.env.APPLE_CLIENT_ID || "com.amarita.web";
 // Commission Amarita prélevée sur chaque commande : 10% pour la plateforme, 90% pour le vendeur.
-const COMMISSION_RATE = 0.10;
+// Commission Amarita : deux segments vendeurs, plus un programme d'affiliation influenceur.
+const COMMISSION_RATE_STANDARD = 0.10;  // vendeur détail (B2C)
+const COMMISSION_RATE_GROSSISTE = 0.03; // vendeur grossiste (B2B)
+// Part reversée à l'influenceur quand une vente passe par son lien/code de parrainage
+// (prélevée SUR la commission Amarita, pas sur le prix de vente — le vendeur n'est jamais impacté).
+const INFLUENCER_SHARE = 0.12;
+// PayTech (paytech.sn) : agrégateur de paiement sénégalais qui encaisse (carte,
+// Orange Money, Wave, Free Money) ET gère aussi les VIREMENTS sortants vers
+// mobile money (API Transfer) — c'est ce qui permet d'envoyer automatiquement
+// au vendeur ce qui lui est dû, dès que le paiement du client est passé par
+// PayTech. À créer sur paytech.sn ; le mode production nécessite une
+// validation manuelle (NINEA, pièce d'identité, registre de commerce — email
+// à contact@paytech.sn). Sans validation, seul env=test fonctionne, et en
+// test le montant débité est aléatoire (100-150 FCFA), pas le vrai montant.
+const PAYTECH_API_KEY = process.env.PAYTECH_API_KEY || "";
+const PAYTECH_API_SECRET = process.env.PAYTECH_API_SECRET || "";
+const PAYTECH_ENV = process.env.PAYTECH_ENV || "test";
+// Nécessaire pour construire l'URL de callback des virements PayTech
+// (payoutSeller tourne parfois hors d'une requête HTTP classique, donc pas
+// d'accès à req.get('host') à cet endroit-là).
+const BASE_URL = process.env.BASE_URL || "https://amarita.onrender.com";
 // Clé API Anthropic pour l'assistant shopping IA — à créer sur console.anthropic.com
 // (Get API Key), puis à coller dans Render → Environment → ANTHROPIC_API_KEY.
 // Facturée à l'usage par Anthropic (pas par Amarita/Render) ; modèle Haiku
@@ -114,6 +150,8 @@ async function start(){
   const products = db.collection('products');
   const orders = db.collection('orders');
   const livreurs = db.collection('livreurs');
+  const influenceurs = db.collection('influenceurs');
+  await influenceurs.createIndex({ code: 1 }, { unique: true });
 
   // Une même adresse e-mail ne peut créer qu'un seul compte vendeur
   // (que ce soit par mot de passe ou par Apple).
@@ -128,7 +166,7 @@ async function start(){
 
   app.post('/api/auth/signup', async (req, res) => {
     try {
-      const { name, email, password } = req.body;
+      const { name, email, password, sellerType, payoutPhone, payoutService } = req.body;
       if (!name || !email || !password) {
         return res.status(400).json({ error: "Nom, e-mail et mot de passe requis." });
       }
@@ -146,6 +184,9 @@ async function start(){
         id: "s_" + Date.now(),
         name,
         email,
+        sellerType: sellerType === 'grossiste' ? 'grossiste' : 'standard',
+        payoutPhone: payoutPhone || null,
+        payoutService: payoutService || null, // "Orange Money Senegal" | "Wave Senegal" | "Free Money Senegal"
         authProvider: 'local',
         passwordHash: bcrypt.hashSync(password, 10),
         createdAt: new Date().toISOString()
@@ -232,7 +273,7 @@ async function start(){
   app.post('/api/products', authMiddleware, async (req, res) => {
     try {
       const { name, price, cat, icon, image } = req.body;
-      const allowedCats = ["mode", "beaute", "epicerie", "artisanat"];
+      const allowedCats = ["mode", "beaute", "epicerie", "artisanat", "fournitures", "immobilier"];
       if (!name || !price || !allowedCats.includes(cat)) {
         return res.status(400).json({ error: "Nom, prix et catégorie valide requis." });
       }
@@ -256,6 +297,34 @@ async function start(){
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "Erreur serveur lors de l'ajout du produit." });
+    }
+  });
+
+  // Infos de versement automatique (numéro Wave/Orange du vendeur) — consultées
+  // et modifiables depuis le tableau de bord vendeur, à tout moment.
+  app.get('/api/sellers/me', authMiddleware, async (req, res) => {
+    try {
+      const seller = await sellers.findOne({ id: req.seller.id }, { projection: { _id: 0, passwordHash: 0 } });
+      if (!seller) return res.status(404).json({ error: "Vendeur introuvable." });
+      res.json({ seller });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erreur serveur." });
+    }
+  });
+
+  app.put('/api/sellers/payout', authMiddleware, async (req, res) => {
+    try {
+      const { payoutPhone, payoutService } = req.body;
+      const allowedServices = ["Wave Senegal", "Orange Money Senegal", "Free Money Senegal"];
+      if (!payoutPhone || !allowedServices.includes(payoutService)) {
+        return res.status(400).json({ error: "Numéro et opérateur valides requis." });
+      }
+      await sellers.updateOne({ id: req.seller.id }, { $set: { payoutPhone: payoutPhone.trim(), payoutService } });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erreur serveur." });
     }
   });
 
@@ -288,6 +357,59 @@ async function start(){
   // Formulaire simple : les candidatures sont enregistrées, Amarita les
   // recontacte manuellement pour l'instant (pas d'attribution automatique
   // de commandes — ce serait une étape suivante, plus complexe).
+  // ---------- Programme influenceurs (parrainage) ----------
+  // Génère un code court, unique, facile à partager (ex: URL "?ref=CODE").
+  function generateAffiliateCode(){
+    return crypto.randomBytes(3).toString('hex').toUpperCase(); // ex: "A3F9C1"
+  }
+
+  app.post('/api/influenceurs', async (req, res) => {
+    try {
+      const { name, phone } = req.body;
+      if (!name || !phone) {
+        return res.status(400).json({ error: "Nom et téléphone requis." });
+      }
+      let code;
+      do { code = generateAffiliateCode(); } while (await influenceurs.findOne({ code }));
+      const influenceur = {
+        id: "i_" + Date.now(),
+        name, phone, code,
+        createdAt: new Date().toISOString()
+      };
+      await influenceurs.insertOne(influenceur);
+      res.json({ code, link: `${req.protocol}://${req.get('host')}/?ref=${code}` });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erreur serveur lors de l'inscription." });
+    }
+  });
+
+  // Un influenceur consulte ses gains avec son code — pas besoin de mot de
+  // passe séparé, le code fait office de clé (comme un lien de suivi de colis).
+  app.get('/api/influenceurs/:code/gains', async (req, res) => {
+    try {
+      const code = req.params.code.trim().toUpperCase();
+      const influenceur = await influenceurs.findOne({ code });
+      if (!influenceur) return res.status(404).json({ error: "Code introuvable." });
+      const list = await orders.find({ affiliateCode: code }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+      const totalGains = list.reduce((sum, o) => sum + o.bySeller.reduce((s2, b) => s2 + (b.influencerFee || 0), 0), 0);
+      res.json({
+        name: influenceur.name,
+        code,
+        totalGains,
+        nbCommandes: list.length,
+        commandes: list.map(o => ({
+          createdAt: o.createdAt,
+          total: o.total,
+          gain: o.bySeller.reduce((s2, b) => s2 + (b.influencerFee || 0), 0)
+        }))
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erreur serveur." });
+    }
+  });
+
   app.post('/api/livreurs', async (req, res) => {
     try {
       const { name, phone, vehicule, zone } = req.body;
@@ -314,10 +436,18 @@ async function start(){
   // afin qu'un client ne puisse pas trafiquer le montant.
   app.post('/api/orders', async (req, res) => {
     try {
-      const { items, paymentMethod } = req.body;
+      const { items, paymentMethod, affiliateCode } = req.body;
       if (!Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ error: "Panier vide." });
       }
+
+      // Vérifie le code de parrainage influenceur, s'il y en a un. Un code
+      // invalide n'empêche jamais la commande : il est simplement ignoré.
+      let influencer = null;
+      if (affiliateCode) {
+        influencer = await influenceurs.findOne({ code: affiliateCode.trim().toUpperCase() });
+      }
+
       const bySeller = {}; // sellerId -> { sellerId, sellerName, subtotal }
       const orderItems = [];
       let total = 0;
@@ -339,11 +469,22 @@ async function start(){
         return res.status(400).json({ error: "Aucun produit valide dans ce panier." });
       }
 
-      const bySellerBreakdown = Object.values(bySeller).map(s => ({
-        ...s,
-        commission: Math.round(s.subtotal * COMMISSION_RATE),
-        amountDue: Math.round(s.subtotal * (1 - COMMISSION_RATE))
-      }));
+      // Le taux de base dépend du type de chaque vendeur (grossiste 3% / détail 10%).
+      const bySellerBreakdown = [];
+      for (const s of Object.values(bySeller)) {
+        const sellerDoc = await sellers.findOne({ id: s.sellerId }, { projection: { sellerType: 1 } });
+        const rate = (sellerDoc && sellerDoc.sellerType === 'grossiste') ? COMMISSION_RATE_GROSSISTE : COMMISSION_RATE_STANDARD;
+        const commission = s.subtotal * rate;
+        const influencerFee = influencer ? commission * INFLUENCER_SHARE : 0;
+        bySellerBreakdown.push({
+          ...s,
+          commissionRate: rate,
+          commission: Math.round(commission),
+          amountDue: Math.round(s.subtotal - commission), // part du vendeur, jamais affectée par l'influenceur
+          influencerFee: Math.round(influencerFee),
+          platformNet: Math.round(commission - influencerFee)
+        });
+      }
 
       const order = {
         id: "o_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
@@ -351,6 +492,9 @@ async function start(){
         total,
         paymentMethod: paymentMethod || 'whatsapp',
         bySeller: bySellerBreakdown,
+        affiliateId: influencer ? influencer.id : null,
+        affiliateCode: influencer ? influencer.code : null,
+        hasAffiliate: !!influencer,
         status: 'nouvelle', // à faire évoluer manuellement plus tard : livrée / payée au vendeur
         createdAt: new Date().toISOString()
       };
@@ -369,17 +513,185 @@ async function start(){
         { "bySeller.sellerId": req.seller.id },
         { projection: { _id: 0 } }
       ).sort({ createdAt: -1 }).toArray();
-      const mine = list.map(o => ({
-        id: o.id,
-        createdAt: o.createdAt,
-        status: o.status,
-        paymentMethod: o.paymentMethod,
-        part: o.bySeller.find(s => s.sellerId === req.seller.id)
-      }));
+      const mine = list.map(o => {
+        const part = o.bySeller.find(s => s.sellerId === req.seller.id);
+        return {
+          id: o.id,
+          createdAt: o.createdAt,
+          status: o.status,
+          paymentMethod: o.paymentMethod,
+          part,
+          payoutStatus: part ? (part.payoutStatus || 'non_verse') : 'non_verse'
+        };
+      });
       res.json({ orders: mine });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "Erreur serveur lors du chargement des commandes." });
+    }
+  });
+
+  // ---------- PayTech : paiement + virement automatique aux vendeurs ----------
+  // Le virement automatique n'est possible QUE pour les commandes payées via
+  // PayTech (Wave/WhatsApp restent manuels : l'argent ne transite jamais par
+  // le solde PayTech d'Amarita dans ces cas, donc rien à reverser depuis là).
+  function verifyPaytechHmac(message, receivedHmac){
+    if (!receivedHmac) return false;
+    const expected = crypto.createHmac('sha256', PAYTECH_API_SECRET).update(message).digest('hex');
+    try {
+      return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(receivedHmac));
+    } catch { return false; }
+  }
+
+  app.post('/api/paytech/request-payment', async (req, res) => {
+    try {
+      if (!PAYTECH_API_KEY || !PAYTECH_API_SECRET) {
+        return res.status(503).json({ error: "PayTech n'est pas encore configuré (clés API manquantes)." });
+      }
+      const { orderId } = req.body;
+      const order = await orders.findOne({ id: orderId });
+      if (!order) return res.status(404).json({ error: "Commande introuvable — appelez /api/orders d'abord." });
+
+      const payRes = await fetch("https://paytech.sn/api/payment/request-payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "API_KEY": PAYTECH_API_KEY,
+          "API_SECRET": PAYTECH_API_SECRET
+        },
+        body: JSON.stringify({
+          item_name: "Commande Amarita",
+          item_price: order.total,
+          currency: "XOF",
+          ref_command: order.id,
+          command_name: `Commande Amarita ${order.id}`,
+          env: PAYTECH_ENV,
+          ipn_url: `${req.protocol}://${req.get('host')}/api/paytech/ipn`,
+          success_url: `${req.protocol}://${req.get('host')}/?payment=success`,
+          cancel_url: `${req.protocol}://${req.get('host')}/?payment=cancel`,
+          custom_field: JSON.stringify({ orderId: order.id })
+        })
+      });
+      const data = await payRes.json();
+      if (data.success === 1) {
+        res.json({ redirect_url: data.redirect_url });
+      } else {
+        res.status(400).json({ error: data.message || "Réponse PayTech invalide." });
+      }
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erreur serveur lors de la demande de paiement." });
+    }
+  });
+
+  // Envoie automatiquement à un vendeur ce qui lui est dû, via l'API Transfer
+  // PayTech. Ne fait rien (silencieusement) si le vendeur n'a pas renseigné
+  // de numéro de versement — son dû reste visible dans son tableau de bord
+  // pour un virement manuel en attendant.
+  async function payoutSeller(orderId, sellerId){
+    const order = await orders.findOne({ id: orderId });
+    if (!order) return;
+    const part = order.bySeller.find(s => s.sellerId === sellerId);
+    if (!part || part.payoutStatus === 'verse' || part.payoutStatus === 'en_cours') return;
+
+    const seller = await sellers.findOne({ id: sellerId });
+    if (!seller || !seller.payoutPhone || !seller.payoutService) {
+      await orders.updateOne(
+        { id: orderId, "bySeller.sellerId": sellerId },
+        { $set: { "bySeller.$.payoutStatus": 'non_verse' } }
+      );
+      return;
+    }
+
+    try {
+      const transferRes = await fetch("https://paytech.sn/api/transfer/transferFund", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "API_KEY": PAYTECH_API_KEY,
+          "API_SECRET": PAYTECH_API_SECRET
+        },
+        body: JSON.stringify({
+          amount: part.amountDue,
+          destination_number: seller.payoutPhone,
+          service: seller.payoutService,
+          callback_url: `${BASE_URL}/api/paytech/transfer-ipn`,
+          external_id: `${orderId}::${sellerId}`
+        })
+      });
+      const data = await transferRes.json();
+      const newStatus = (data.success === 1) ? 'en_cours' : 'echec';
+      await orders.updateOne(
+        { id: orderId, "bySeller.sellerId": sellerId },
+        { $set: { "bySeller.$.payoutStatus": newStatus, "bySeller.$.transferId": data.transfer?.id_transfer || null } }
+      );
+    } catch (err) {
+      console.error("Échec virement vendeur :", err);
+      await orders.updateOne(
+        { id: orderId, "bySeller.sellerId": sellerId },
+        { $set: { "bySeller.$.payoutStatus": 'echec' } }
+      );
+    }
+  }
+
+  // Notification de PAIEMENT (le client a payé). Déclenche le virement
+  // automatique vers chaque vendeur de la commande.
+  app.post('/api/paytech/ipn', async (req, res) => {
+    try {
+      const { type_event, ref_command, item_price, api_key_sha256, api_secret_sha256, hmac_compute } = req.body;
+      const hmacMessage = `${item_price}|${ref_command}|${PAYTECH_API_KEY}`;
+      const validHmac = verifyPaytechHmac(hmacMessage, hmac_compute);
+      const expectedKeyHash = crypto.createHash('sha256').update(PAYTECH_API_KEY).digest('hex');
+      const expectedSecretHash = crypto.createHash('sha256').update(PAYTECH_API_SECRET).digest('hex');
+      const validSha = (api_key_sha256 === expectedKeyHash && api_secret_sha256 === expectedSecretHash);
+      if (!validHmac && !validSha) {
+        return res.status(403).send("IPN KO — signature invalide");
+      }
+
+      const order = await orders.findOne({ id: ref_command });
+      if (!order) return res.status(200).send("IPN OK (commande introuvable, ignorée)");
+
+      if (type_event === 'sale_complete') {
+        await orders.updateOne({ id: ref_command }, { $set: { paymentStatus: 'payee' } });
+        // Virement automatique à chaque vendeur de la commande.
+        for (const s of order.bySeller) {
+          await payoutSeller(ref_command, s.sellerId);
+        }
+      } else if (type_event === 'sale_canceled') {
+        await orders.updateOne({ id: ref_command }, { $set: { paymentStatus: 'annulee' } });
+      }
+      res.send("IPN OK");
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Erreur IPN");
+    }
+  });
+
+  // Notification de VIREMENT (confirmation que l'argent est bien arrivé chez le vendeur).
+  app.post('/api/paytech/transfer-ipn', async (req, res) => {
+    try {
+      const { type_event, amount, id_transfer, api_key_sha256, api_secret_sha256, hmac_compute, external_id } = req.body;
+      const hmacMessage = `${amount}|${id_transfer}|${PAYTECH_API_KEY}`;
+      const validHmac = verifyPaytechHmac(hmacMessage, hmac_compute);
+      const expectedKeyHash = crypto.createHash('sha256').update(PAYTECH_API_KEY).digest('hex');
+      const expectedSecretHash = crypto.createHash('sha256').update(PAYTECH_API_SECRET).digest('hex');
+      const validSha = (api_key_sha256 === expectedKeyHash && api_secret_sha256 === expectedSecretHash);
+      if (!validHmac && !validSha) {
+        return res.status(403).send("IPN KO — signature invalide");
+      }
+
+      const [orderId, sellerId] = (external_id || '').split('::');
+      const newStatus = type_event === 'transfer_success' ? 'verse' : (type_event === 'transfer_failed' ? 'echec' : null);
+      if (orderId && sellerId && newStatus) {
+        await orders.updateOne(
+          { id: orderId, "bySeller.sellerId": sellerId },
+          { $set: { "bySeller.$.payoutStatus": newStatus } }
+        );
+      }
+      res.send("IPN OK");
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Erreur IPN transfer");
     }
   });
 
@@ -388,7 +700,7 @@ async function start(){
   // dans la variable d'environnement ANTHROPIC_API_KEY sur Render. Sans elle,
   // l'assistant répond poliment qu'il n'est pas encore configuré — le reste
   // du site continue de fonctionner normalement.
-  const CAT_LABELS = { mode: "Mode & Vêtements", beaute: "Beauté & Bien-être", epicerie: "Épicerie & Alimentation", artisanat: "Artisanat & Maison" };
+  const CAT_LABELS = { mode: "Mode & Vêtements", beaute: "Beauté & Bien-être", epicerie: "Épicerie & Alimentation", artisanat: "Artisanat & Maison", fournitures: "Fournitures", immobilier: "Immobilier" };
 
   app.post('/api/assistant/chat', async (req, res) => {
     try {
