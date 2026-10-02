@@ -11,17 +11,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Amarita — Le marché de tout</title>
-<meta name="description" content="Amarita, le marché en ligne au Sénégal : mode, beauté, épicerie et artisanat. Prix fixes, paiement par WhatsApp, Wave ou Orange Money, livraison assurée par notre service client.">
+<meta name="description" content="Amarita, le marché en ligne de Dakar : mode, beauté, épicerie et artisanat. Prix fixes, paiement par WhatsApp, Wave ou Orange Money, livraison assurée par notre service client.">
 <meta name="theme-color" content="#2D1449">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="fr_FR">
 <meta property="og:title" content="Amarita — Le marché de tout">
-<meta property="og:description" content="Mode, beauté, épicerie, artisanat — le marché sénégalais livré chez vous.">
+<meta property="og:description" content="Mode, beauté, épicerie, artisanat — le marché de Dakar livré chez vous.">
 <meta property="og:url" content="https://amarita.onrender.com">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8D%83%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&family=Work+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<script type="text/javascript" src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js"></script>
+<script type="text/javascript" src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js" defer></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 <style>
@@ -537,6 +537,28 @@
   .assistant-form input{flex:1; border:none; padding:12px; font-family:'Work Sans', sans-serif; font-size:.9rem; background:var(--blanc); color:var(--encre);}
   .assistant-form input:focus{outline:none;}
   .assistant-form button{background:var(--mangue); border:none; width:44px; color:var(--encre); font-size:1.1rem; cursor:pointer;}
+
+  .legal-entry{background:#fffaf0;border:1px solid #d9c9a9;border-radius:12px;padding:12px 14px;margin:10px 0;font-size:.82rem;color:#3f3548;}
+  .legal-entry p{margin:5px 0 9px;}
+  .legal-entry a{color:#5b2aa8;font-weight:700;}
+  .legal-check{display:flex;gap:8px;align-items:flex-start;margin:9px 0;font-size:.82rem;}
+  .legal-check input{margin-top:3px;accent-color:#5b2aa8;}
+  .legal-mini{padding:8px 0 0;line-height:1.5;}
+
+  .customer-checkout{margin:12px 0;padding:12px;border:1px solid rgba(22,38,44,.1);border-radius:14px;background:#fbfaf6;}
+  .customer-checkout h4{margin:0 0 8px;font-family:'Bricolage Grotesque';}
+  .customer-checkout input,.customer-checkout textarea{width:100%;box-sizing:border-box;padding:10px;border:1px solid #d8ddd8;border-radius:9px;margin:4px 0;font:inherit;background:#fff;}
+  .customer-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+  .track-card{padding:12px;border-radius:14px;background:#f1eee4;margin-top:10px;}
+  .track-step{display:flex;gap:8px;align-items:flex-start;padding:7px 0;font-size:.85rem;}
+  .track-dot{width:10px;height:10px;border-radius:50%;background:#b8c1bd;margin-top:4px;flex:none;}
+  .track-dot.done{background:#1f7a4d;}
+  .track-dot.current{background:#e8b923;box-shadow:0 0 0 4px rgba(232,185,35,.18);}
+  .fav-btn{position:absolute;top:8px;right:8px;border:0;background:rgba(255,255,255,.92);border-radius:50%;width:34px;height:34px;cursor:pointer;font-size:1rem;}
+  .product-media{position:relative;}
+  .customer-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+  .customer-actions button{border:1px solid rgba(22,38,44,.12);background:#fff;border-radius:9px;padding:7px 10px;cursor:pointer;}
+  @media(max-width:600px){.customer-grid{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
@@ -657,9 +679,33 @@
       <label class="pay-opt"><input type="radio" name="paymethod" value="paytech"><span>Carte / Mobile Money</span></label>
     </div>
     <div id="cardNote" class="card-note"></div>
-    <p style="font-size:.78rem; color:#5a6a70; margin:6px 0 0;">Prix fixes, aucune négociation. Livraison assurée par notre service client Amarita.</p>
+    <div class="customer-checkout">
+      <h4>📦 Où devons-nous livrer ?</h4>
+      <div class="customer-grid">
+        <input id="customerName" type="text" placeholder="Nom complet" autocomplete="name">
+        <input id="customerPhone" type="tel" placeholder="Téléphone" autocomplete="tel">
+      </div>
+      <div class="customer-grid">
+        <input id="deliveryZone" type="text" placeholder="Zone / quartier (ex. Thiès centre)" autocomplete="address-level2">
+        <input id="deliveryFee" type="number" min="0" step="1" placeholder="Frais de livraison (FCFA)">
+      </div>
+      <textarea id="deliveryAddress" rows="2" placeholder="Adresse ou point de livraison précis"></textarea>
+      <input id="pickupZone" type="text" placeholder="Zone de retrait (facultatif)">
+      <p style="font-size:.72rem;color:#5a6a70;margin:5px 0 0;">Ces informations servent à préparer la livraison. Ne partagez pas de données sensibles inutiles.</p>
+    </div>
+    <div class="customer-actions">
+      <button type="button" onclick="openTracking()">📍 Suivre une commande</button>
+      <button type="button" onclick="openSupport()">🛡️ Assistance Amarita</button>
+      <button type="button" onclick="showFavorites()">❤️ Mes favoris</button>
+    </div>
+    <p style="font-size:.78rem; color:#5a6a70; margin:6px 0 0;">Prix fixes. Livraison assurée par un réseau de livreurs indépendants Amarita.</p>
     <button class="checkout-btn" id="checkoutBtn">💬 Commander sur WhatsApp</button>
   </div>
+</aside>
+
+<aside class="drawer" id="customerDrawer" aria-label="Espace client">
+  <div class="drawer-head"><h3 id="customerDrawerTitle" style="margin:0;">Espace client</h3><button onclick="closeAllDrawers()" aria-label="Fermer">✕</button></div>
+  <div class="drawer-items" id="customerDrawerBody"></div>
 </aside>
 
 <aside class="drawer" id="sellerDrawer" aria-label="Espace vendeur">
@@ -830,6 +876,7 @@ function renderProducts(){
             <div class="product-card" style="--cat-color:${c.color}" data-name="${p.name.toLowerCase()}">
               <div class="product-media">
                 ${productMedia(p)}
+                ${c.listing ? '' : `<button class="fav-btn" onclick="toggleFavorite('${p.id}')" aria-label="Ajouter aux favoris">${isFavorite(p.id) ? '❤️' : '♡'}</button>`}
                 ${session && session.id === p.sellerId ? `
                   <button class="remove-badge" onclick="deleteMyProduct('${p.id}')" aria-label="Retirer ce produit">🗑️</button>
                 ` : ''}
@@ -973,12 +1020,12 @@ function renderCart(){
 }
 
 function openCart(){
-  document.getElementById('sellerDrawer').classList.remove('open');
+  ['sellerDrawer','livreurDrawer','influenceurDrawer','customerDrawer'].forEach(id=>document.getElementById(id).classList.remove('open'));
   document.getElementById('cartDrawer').classList.add('open');
   document.getElementById('overlay').classList.add('open');
 }
 function openSeller(){
-  document.getElementById('cartDrawer').classList.remove('open');
+  ['cartDrawer','livreurDrawer','influenceurDrawer','customerDrawer'].forEach(id=>document.getElementById(id).classList.remove('open'));
   document.getElementById('livreurDrawer').classList.remove('open');
   document.getElementById('influenceurDrawer').classList.remove('open');
   document.getElementById('sellerDrawer').classList.add('open');
@@ -986,14 +1033,14 @@ function openSeller(){
   renderSellerPanel();
 }
 function openLivreur(){
-  document.getElementById('cartDrawer').classList.remove('open');
+  ['cartDrawer','sellerDrawer','influenceurDrawer','customerDrawer'].forEach(id=>document.getElementById(id).classList.remove('open'));
   document.getElementById('sellerDrawer').classList.remove('open');
   document.getElementById('influenceurDrawer').classList.remove('open');
   document.getElementById('livreurDrawer').classList.add('open');
   document.getElementById('overlay').classList.add('open');
 }
 function openInfluenceur(){
-  document.getElementById('cartDrawer').classList.remove('open');
+  ['cartDrawer','sellerDrawer','livreurDrawer','customerDrawer'].forEach(id=>document.getElementById(id).classList.remove('open'));
   document.getElementById('sellerDrawer').classList.remove('open');
   document.getElementById('livreurDrawer').classList.remove('open');
   document.getElementById('influenceurDrawer').classList.add('open');
@@ -1004,6 +1051,7 @@ function closeAllDrawers(){
   document.getElementById('sellerDrawer').classList.remove('open');
   document.getElementById('livreurDrawer').classList.remove('open');
   document.getElementById('influenceurDrawer').classList.remove('open');
+  document.getElementById('customerDrawer').classList.remove('open');
   document.getElementById('overlay').classList.remove('open');
 }
 
@@ -1028,7 +1076,14 @@ function renderSellerPanel(){
       <form id="signupForm" class="seller-form" style="display:none;">
         <input type="text" name="name" placeholder="Nom de la boutique" required>
         <input type="email" name="email" placeholder="Adresse e-mail" required>
-        <input type="password" name="password" placeholder="Mot de passe (6 caractères min.)" required minlength="6">
+        <input type="password" name="password" placeholder="Mot de passe (8 caractères min.)" required minlength="8">
+        <div class="legal-entry">
+          <strong>Avant de créer votre compte</strong>
+          <p>Veuillez prendre connaissance de la <a href="/confidentialite.html" target="_blank" rel="noopener noreferrer">Politique de confidentialité</a> et des <a href="/conditions.html" target="_blank" rel="noopener noreferrer">Conditions d'utilisation</a>.</p>
+          <details><summary>Afficher la politique de confidentialité</summary><div class="legal-mini"><p>Amarita collecte les données nécessaires au compte, aux commandes, à la livraison, à la sécurité et au fonctionnement du service. Certaines données peuvent être transmises à ses prestataires techniques (hébergement, base de données, paiement, connexion Apple et assistant IA selon les fonctionnalités utilisées). Vous disposez des droits prévus par la réglementation applicable. Consultez le texte complet avant de poursuivre.</p></div></details>
+          <label class="legal-check"><input type="checkbox" name="acceptedTerms" required> <span>J'accepte les conditions d'utilisation de Amarita.</span></label>
+          <label class="legal-check"><input type="checkbox" name="acceptedPrivacy" required> <span>J'ai pris connaissance de la politique de confidentialité de Amarita.</span></label>
+        </div>
         <select name="sellerType" required>
           <option value="standard">Vendeur détail (commission 10%)</option>
           <option value="grossiste">Vendeur grossiste / gros volumes (commission 3%)</option>
@@ -1037,6 +1092,10 @@ function renderSellerPanel(){
         <p class="seller-error" id="signupError"></p>
       </form>
       <div class="seller-divider">ou</div>
+      <div class="legal-entry">
+        <p>Pour créer un compte avec Apple, vous devez également accepter les conditions.</p>
+        <label class="legal-check"><input type="checkbox" id="appleLegalConsent"> <span>J'accepte les conditions d'utilisation de Amarita et j'ai pris connaissance de la politique de confidentialité.</span></label>
+      </div>
       <button type="button" id="appleSignInBtn" class="apple-btn"> Se connecter avec Apple</button>
       <p class="seller-error" id="appleError"></p>
     `;
@@ -1178,6 +1237,11 @@ async function handleSignup(e){
 
 async function handleAppleSignIn(){
   const errorEl = document.getElementById('appleError');
+  const legal = document.getElementById('appleLegalConsent');
+  if(!legal || !legal.checked){
+    errorEl.textContent = "Veuillez accepter les conditions d'utilisation et prendre connaissance de la politique de confidentialité avant de continuer.";
+    return;
+  }
   errorEl.textContent = '';
   if(typeof AppleID === 'undefined'){
     errorEl.textContent = "Connexion Apple pas encore prête, réessayez dans un instant.";
@@ -1197,7 +1261,7 @@ async function handleAppleSignIn(){
       : undefined;
     const res = await fetch(`${API_BASE}/api/auth/apple`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ id_token: idToken, name: fullName })
+      body: JSON.stringify({ id_token: idToken, name: fullName, acceptedTerms: true, acceptedPrivacy: true })
     });
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || "Connexion Apple impossible.");
@@ -1364,7 +1428,9 @@ function buildWhatsAppMessage(){
     total += p.price * i.qty;
     lines.push(`- ${p.name} x${i.qty} (${formatFCFA(p.price)})`);
   });
-  lines.push(`Total : ${formatFCFA(total)}`);
+  const fee = Math.max(0, Number(document.getElementById('deliveryFee')?.value || 0));
+  if(fee) lines.push(`Livraison : ${formatFCFA(fee)}`);
+  lines.push(`Total : ${formatFCFA(total + fee)}`);
   return lines.join("\n");
 }
 
@@ -1439,24 +1505,49 @@ async function goToPaytech(orderId){
 // quand même (le client ne doit jamais être bloqué par un souci technique).
 async function recordOrder(paymentMethod){
   const items = cart.map(i => ({ productId: i.id, qty: i.qty }));
+  const customer = {
+    name: document.getElementById('customerName')?.value.trim() || '',
+    phone: document.getElementById('customerPhone')?.value.trim() || ''
+  };
+  const delivery = {
+    pickupZone: document.getElementById('pickupZone')?.value.trim() || '',
+    deliveryZone: document.getElementById('deliveryZone')?.value.trim() || '',
+    address: document.getElementById('deliveryAddress')?.value.trim() || '',
+    fee: Math.max(0, Number(document.getElementById('deliveryFee')?.value || 0))
+  };
+  if(!customer.name || !customer.phone || !delivery.deliveryZone || !delivery.address){
+    return { error: 'Renseignez votre nom, téléphone, zone et adresse de livraison.' };
+  }
   try {
     const res = await fetch(`${API_BASE}/api/orders`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ items, paymentMethod, affiliateCode })
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ items, paymentMethod, affiliateCode, customer, delivery })
     });
     const data = await res.json();
-    if(res.ok) return { total: data.total, orderId: data.orderId };
-  } catch { /* pas grave, on continue avec le total calculé côté client */ }
-  return { total: cartTotal(), orderId: null };
+    if(res.ok){
+      try { localStorage.setItem('amarita_last_order', JSON.stringify({orderId:data.orderId,trackingToken:data.trackingToken})); } catch {}
+      return { total: data.total, orderId: data.orderId, trackingToken: data.trackingToken };
+    }
+    throw new Error(data.error || "Impossible d’enregistrer la commande.");
+  } catch (err) {
+    return { error: err.message || "Impossible d’enregistrer la commande.", total: null, orderId: null };
+  }
 }
 
 async function handleCheckout(){
   const method = selectedPayMethod();
   const btn = document.getElementById('checkoutBtn');
   btn.disabled = true;
-  const { total, orderId } = await recordOrder(method);
+  const result = await recordOrder(method);
   btn.disabled = false;
+  if(result.error){
+    const note = document.getElementById('cardNote');
+    note.textContent = result.error;
+    note.classList.add('visible');
+    return;
+  }
+  const { total, orderId, trackingToken } = result;
+  if(orderId && trackingToken){ showOrderConfirmation(orderId, trackingToken, total); }
   if(method === 'whatsapp'){
     goToWhatsApp(buildWhatsAppMessage());
   } else if(method === 'wave'){
@@ -1472,6 +1563,58 @@ async function handleCheckout(){
     goToOrange(total);
   }
 }
+
+function favoriteIds(){ try{return JSON.parse(localStorage.getItem('amarita_favorites')||'[]');}catch{return[];} }
+function isFavorite(id){ return favoriteIds().includes(id); }
+function toggleFavorite(id){
+  const ids=favoriteIds(); const next=ids.includes(id)?ids.filter(x=>x!==id):[...ids,id];
+  try{localStorage.setItem('amarita_favorites',JSON.stringify(next));}catch{} renderProducts();
+}
+function showFavorites(){
+  const ids=favoriteIds(); const items=PRODUCTS.filter(p=>ids.includes(p.id));
+  document.getElementById('customerDrawerTitle').textContent='❤️ Mes favoris';
+  document.getElementById('customerDrawerBody').innerHTML=items.length?items.map(p=>`<div class="drawer-item"><div style="flex:1"><div class="di-name">${p.name}</div><div class="di-price">${formatFCFA(p.price)}</div></div><button class="di-remove" onclick="addToCart('${p.id}')">Ajouter</button></div>`).join(''):'<p>Aucun favori pour le moment.</p>';
+  openCustomerDrawer();
+}
+function openCustomerDrawer(){ document.getElementById('customerDrawer').classList.add('open'); document.getElementById('overlay').classList.add('open'); }
+function showOrderConfirmation(orderId, token, total){
+  document.getElementById('customerDrawerTitle').textContent='🎉 Commande enregistrée';
+  document.getElementById('customerDrawerBody').innerHTML=`<div class="track-card"><strong>Commande #${orderId}</strong><p>${formatFCFA(total)}</p><p>Votre commande est enregistrée. Utilisez le suivi Amarita pour voir les étapes de livraison.</p><button class="checkout-btn" onclick="openTracking('${token}')">📍 Suivre ma commande</button></div>`;
+  openCustomerDrawer();
+}
+let customerTrackMap=null;
+let customerTrackMarker=null;
+async function openTracking(token){
+  let saved=null; try{saved=JSON.parse(localStorage.getItem('amarita_last_order')||'null');}catch{}
+  token=token||saved?.trackingToken;
+  document.getElementById('customerDrawerTitle').textContent='📍 Suivi de commande';
+  document.getElementById('customerDrawerBody').innerHTML=token?'<p>Chargement du suivi…</p>':'<p>Aucune commande enregistrée sur cet appareil.</p>';
+  openCustomerDrawer();
+  if(!token)return;
+  try{
+    const res=await fetch(`${API_BASE}/api/orders/track/${encodeURIComponent(token)}`); const data=await res.json();
+    if(!res.ok)throw new Error(data.error||'Commande introuvable.');
+    const steps=[['commande_creee','Commande enregistrée'],['paiement_confirme','Paiement confirmé'],['a_attribuer','Recherche d’un livreur'],['acceptee','Livreur attribué'],['recuperee','Colis récupéré'],['en_livraison','En livraison'],['livree','Commande livrée']];
+    const current=data.order.delivery?.status||data.order.paymentStatus;
+    const events=new Set((data.events||[]).map(e=>e.type));
+    const html=steps.map(([key,label])=>{const done=events.has(key)||(key==='livree'&&current==='livree');const active=current===key;return `<div class="track-step"><span class="track-dot ${done?'done ':''}${active?'current':''}"></span><div>${done?'✅ ':''}${label}</div></div>`;}).join('');
+    const d=data.order.delivery;
+    const courier=d?.livreur?`<p>🛵 Livreur : <strong>${d.livreur.name||'Livreur Amarita'}</strong>${d.livreur.phone?` — ${d.livreur.phone}`:''}</p>`:'<p>🛵 Aucun livreur attribué pour le moment.</p>';
+    const review=data.review?`<p>⭐ Merci pour votre avis.</p>`:`<form onsubmit="submitReview(event,'${data.order.id}','${token}')"><label>Votre note <select name="rating"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select></label><textarea name="comment" placeholder="Un commentaire (facultatif)"></textarea><button class="checkout-btn">⭐ Donner mon avis</button></form>`;
+    const loc=d?.currentLocation;
+    document.getElementById('customerDrawerBody').innerHTML=`<div class="track-card"><strong>Commande #${data.order.id}</strong><p>Total : ${formatFCFA(data.order.total)}</p>${courier}${html}${loc?'<div id="customerTrackMap" style="height:210px;border-radius:12px;overflow:hidden;margin-top:10px;"></div><small>📍 Position approximative du livreur, mise à jour régulièrement.</small>':''}</div>${review}<button class="checkout-btn" style="margin-top:8px;background:var(--vert);" onclick="openSupport('${data.order.id}','${token}')">🛡️ Signaler un problème</button>`;
+    if(loc && typeof L!=='undefined'){
+      setTimeout(()=>{ try{ if(customerTrackMap) customerTrackMap.remove(); customerTrackMap=L.map('customerTrackMap').setView([loc.lat,loc.lng],14); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(customerTrackMap); customerTrackMarker=L.marker([loc.lat,loc.lng]).addTo(customerTrackMap).bindPopup('Livreur Amarita').openPopup(); }catch{} },50);
+    }
+  }catch(err){document.getElementById('customerDrawerBody').innerHTML=`<p>${err.message}</p>`;}
+}
+async function submitReview(e,orderId,token){e.preventDefault();const f=e.target;const res=await fetch(`${API_BASE}/api/orders/${orderId}/review`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({trackingToken:token,rating:f.rating.value,comment:f.comment.value})});const d=await res.json();if(!res.ok)return alert(d.error||'Erreur');openTracking(token);}
+function openSupport(orderId,token){
+  document.getElementById('customerDrawerTitle').textContent='🛡️ Assistance Amarita';
+  document.getElementById('customerDrawerBody').innerHTML=`<form onsubmit="submitSupport(event,'${orderId||''}','${token||''}')"><select name="category"><option value="livraison">Problème de livraison</option><option value="produit">Produit</option><option value="paiement">Paiement</option><option value="autre">Autre</option></select><input name="phone" placeholder="Téléphone de contact"><textarea name="message" rows="5" required placeholder="Expliquez-nous le problème…"></textarea><button class="checkout-btn">Envoyer à l’assistance</button></form>`;
+  openCustomerDrawer();
+}
+async function submitSupport(e,orderId,token){e.preventDefault();const f=e.target;const res=await fetch(`${API_BASE}/api/support`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId,trackingToken:token,category:f.category.value,message:f.message.value,phone:f.phone.value})});const d=await res.json();document.getElementById('customerDrawerBody').innerHTML=res.ok?`<div class="track-card">✅ Demande reçue. Référence : <strong>${d.ticketId}</strong><p>Notre assistance pourra utiliser cette référence pour le suivi.</p></div>`:`<p>${d.error||'Erreur'}</p>`;}
 
 function filterProducts(query){
   const q = query.trim().toLowerCase();
@@ -1678,6 +1821,11 @@ document.getElementById('assistantForm').addEventListener('submit', async (e) =>
   input.disabled = false;
   input.focus();
 });
+</script>
+
+<script>
+// Notifications de suivi : vérifie discrètement le dernier statut pendant que la page est ouverte.
+setInterval(async()=>{try{const saved=JSON.parse(localStorage.getItem('amarita_last_order')||'null');if(!saved?.trackingToken)return;const r=await fetch(`${API_BASE}/api/orders/track/${encodeURIComponent(saved.trackingToken)}`);if(!r.ok)return;const d=await r.json();const status=d.order.delivery?.status||d.order.paymentStatus;const last=localStorage.getItem('amarita_last_status');if(last&&last!==status&&typeof addAssistantMessage==='function'){addAssistantMessage('assistant',`🔔 Mise à jour : votre commande est maintenant « ${status.replaceAll('_',' ')} ».`);}localStorage.setItem('amarita_last_status',status);}catch{}} , 20000);
 </script>
 </body>
 </html>

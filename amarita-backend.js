@@ -65,8 +65,14 @@ app.use(express.urlencoded({ extended: true })); // les notifications IPN PayTec
 app.use(express.static(__dirname, { index: 'index.html' }));
 
 const JWT_SECRET = (process.env.JWT_SECRET || "").trim();
-if (!JWT_SECRET && process.env.NODE_ENV === "production") throw new Error("JWT_SECRET est obligatoire en production.");
-if (!JWT_SECRET) console.warn("⚠️ JWT_SECRET absent : utilisez une vraie valeur avant tout déploiement public.");
+if (!JWT_SECRET && process.env.NODE_ENV === "production") {
+  console.error("❌ JWT_SECRET est obligatoire en production.");
+  process.exit(1);
+}
+if (JWT_SECRET && JWT_SECRET.length < 32 && process.env.NODE_ENV === "production") {
+  console.error("❌ JWT_SECRET doit contenir au moins 32 caractères en production.");
+  process.exit(1);
+}
 // .trim() est important : coller une variable d'environnement depuis un
 // clavier de téléphone laisse parfois un espace ou un retour à la ligne
 // invisible au début/à la fin, ce qui suffit à faire échouer l'authentification
@@ -102,6 +108,22 @@ const BASE_URL = process.env.BASE_URL || "https://amarita.onrender.com";
 // Facturée à l'usage par Anthropic (pas par Amarita/Render) ; modèle Haiku
 // utilisé ici pour rester très peu coûteux.
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
+const AMARITA_ADMIN_KEY = (process.env.AMARITA_ADMIN_KEY || "").trim();
+
+// Limiteur simple en mémoire pour ralentir les abus sur les routes sensibles.
+const rateBuckets = new Map();
+function rateLimit(windowMs, max, keyPrefix){
+  return (req,res,next)=>{
+    const key = `${keyPrefix}:${req.ip || 'unknown'}`;
+    const now = Date.now();
+    let b = rateBuckets.get(key);
+    if(!b || now - b.start >= windowMs) b = {start:now,count:0};
+    b.count++; rateBuckets.set(key,b);
+    if(b.count > max) return res.status(429).json({error:'Trop de tentatives. Réessayez dans quelques instants.'});
+    next();
+  };
+}
+setInterval(()=>{ const now=Date.now(); for(const [k,b] of rateBuckets){ if(now-b.start>15*60*1000) rateBuckets.delete(k); } }, 15*60*1000).unref();
 
 if (!MONGODB_URI) {
   console.error("⚠️  MONGODB_URI n'est pas définie. Ajoutez-la dans les variables d'environnement (voir les instructions).");
@@ -153,6 +175,12 @@ async function start(){
   const orders = db.collection('orders');
   const livreurs = db.collection('livreurs');
   const influenceurs = db.collection('influenceurs');
+  const reviews = db.collection('reviews');
+  const supportTickets = db.collection('support_tickets');
+  const orderEvents = db.collection('order_events');
+  await reviews.createIndex({ orderId: 1 }, { unique: true });
+  await supportTickets.createIndex({ id: 1 }, { unique: true });
+  await orderEvents.createIndex({ orderId: 1, createdAt: -1 });
   await influenceurs.createIndex({ code: 1 }, { unique: true });
 
   // Une même adresse e-mail ne peut créer qu'un seul compte vendeur
@@ -166,18 +194,18 @@ async function start(){
   // ---------- Comptes vendeurs ----------
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  app.post('/api/auth/signup', async (req, res) => {
+  app.post('/api/auth/signup', rateLimit(60*1000, 10, 'auth_signup'), async (req, res) => {
     try {
-      let { name, email, password, sellerType, payoutPhone, payoutService } = req.body;
-      email = String(email || "").trim().toLowerCase();
+      const { name, password, sellerType, payoutPhone, payoutService } = req.body;
+      const email = String(req.body.email || '').trim().toLowerCase();
       if (!name || !email || !password) {
         return res.status(400).json({ error: "Nom, e-mail et mot de passe requis." });
       }
       if (!EMAIL_RE.test(email)) {
         return res.status(400).json({ error: "Adresse e-mail invalide." });
       }
-      if (password.length < 6) {
-        return res.status(400).json({ error: "Le mot de passe doit faire au moins 6 caractères." });
+      if (password.length < 8) {
+        return res.status(400).json({ error: "Le mot de passe doit faire au moins 8 caractères." });
       }
       const existing = await sellers.findOne({ email });
       if (existing) {
@@ -191,11 +219,11 @@ async function start(){
         payoutPhone: payoutPhone || null,
         payoutService: payoutService || null, // "Orange Money Senegal" | "Wave Senegal" | "Free Money Senegal"
         authProvider: 'local',
-        passwordHash: bcrypt.hashSync(password, 10),
+        passwordHash: bcrypt.hashSync(password, 12),
         createdAt: new Date().toISOString()
       };
       await sellers.insertOne(seller);
-      const token = jwt.sign({ id: seller.id, name: seller.name }, JWT_SECRET, { expiresIn: '90d' });
+      const token = jwt.sign({ id: seller.id, name: seller.name }, JWT_SECRET, { expiresIn: '7d' });
       res.json({ token, seller: { id: seller.id, name: seller.name } });
     } catch (err) {
       console.error(err);
@@ -203,15 +231,15 @@ async function start(){
     }
   });
 
-  app.post('/api/auth/login', async (req, res) => {
+  app.post('/api/auth/login', rateLimit(60*1000, 10, 'auth_login'), async (req, res) => {
     try {
-      let { email, password } = req.body;
-      email = String(email || "").trim().toLowerCase();
+      const email = String(req.body.email || '').trim().toLowerCase();
+      const { password } = req.body;
       const seller = await sellers.findOne({ email });
       if (!seller || seller.authProvider === 'apple' || !bcrypt.compareSync(password || '', seller.passwordHash || '')) {
         return res.status(401).json({ error: "E-mail ou mot de passe incorrect." });
       }
-      const token = jwt.sign({ id: seller.id, name: seller.name }, JWT_SECRET, { expiresIn: '90d' });
+      const token = jwt.sign({ id: seller.id, name: seller.name }, JWT_SECRET, { expiresIn: '7d' });
       res.json({ token, seller: { id: seller.id, name: seller.name } });
     } catch (err) {
       console.error(err);
@@ -222,7 +250,7 @@ async function start(){
   // Connexion / inscription automatique via "Se connecter avec Apple".
   // Le frontend envoie le id_token reçu d'Apple ; on le vérifie ici
   // auprès d'Apple avant de faire confiance à l'e-mail qu'il contient.
-  app.post('/api/auth/apple', async (req, res) => {
+  app.post('/api/auth/apple', rateLimit(60*1000, 10, 'auth_apple'), async (req, res) => {
     try {
       const { id_token, name } = req.body;
       if (!id_token) {
@@ -238,7 +266,7 @@ async function start(){
         console.error("Vérification Apple échouée :", e.message);
         return res.status(401).json({ error: "Connexion Apple invalide ou expirée." });
       }
-      const email = String(applePayload.email || "").trim().toLowerCase();
+      const email = String(applePayload.email || '').trim().toLowerCase();
       if (!email) {
         return res.status(400).json({ error: "Apple n'a pas transmis d'e-mail pour ce compte." });
       }
@@ -255,7 +283,7 @@ async function start(){
         };
         await sellers.insertOne(seller);
       }
-      const token = jwt.sign({ id: seller.id, name: seller.name }, JWT_SECRET, { expiresIn: '90d' });
+      const token = jwt.sign({ id: seller.id, name: seller.name }, JWT_SECRET, { expiresIn: '7d' });
       res.json({ token, seller: { id: seller.id, name: seller.name } });
     } catch (err) {
       console.error(err);
@@ -279,8 +307,8 @@ async function start(){
       const { name, price, cat, icon, image } = req.body;
       const allowedCats = ["mode", "beaute", "epicerie", "artisanat", "fournitures", "immobilier"];
       const numericPrice = Number(price);
-      if (!String(name || "").trim() || !Number.isFinite(numericPrice) || numericPrice <= 0 || !allowedCats.includes(cat)) {
-        return res.status(400).json({ error: "Nom, prix positif et catégorie valide requis." });
+      if (!name || !Number.isFinite(numericPrice) || numericPrice <= 0 || !allowedCats.includes(cat)) {
+        return res.status(400).json({ error: "Nom, prix et catégorie valide requis." });
       }
       if (image && !image.startsWith('data:image/')) {
         return res.status(400).json({ error: "Format de photo invalide." });
@@ -358,10 +386,18 @@ async function start(){
     }
   });
 
-  // ---------- Candidatures livreurs ----------
-  // Formulaire simple : les candidatures sont enregistrées, Amarita les
-  // recontacte manuellement pour l'instant (pas d'attribution automatique
-  // de commandes — ce serait une étape suivante, plus complexe).
+  // ---------- Réseau de livreurs indépendants Amarita ----------
+  // Les livreurs ne sont pas salariés d'Amarita : ils candidatent comme
+  // partenaires indépendants, indiquent leur zone et leur véhicule, puis
+  // peuvent se déclarer disponibles pour recevoir des courses.
+  await livreurs.createIndex({ id: 1 }, { unique: true });
+  await livreurs.createIndex({ phone: 1 }, { unique: true });
+  await livreurs.createIndex({ email: 1 }, { sparse: true, unique: true });
+
+  // Candidature d'un livreur indépendant.
+  // Après validation, son statut peut passer à "actif".
+  // Le système de courses ci-dessous permet ensuite l'attribution volontaire.
+  // Aucun statut "salarié" ou contrat de travail n'est créé par le backend.
   // ---------- Programme influenceurs (parrainage) ----------
   // Génère un code court, unique, facile à partager (ex: URL "?ref=CODE").
   function generateAffiliateCode(){
@@ -415,33 +451,299 @@ async function start(){
     }
   });
 
+  // ---------- Livreurs indépendants : comptes + courses ----------
+  // Un livreur Amarita est un partenaire indépendant. Son compte est séparé
+  // des comptes vendeurs et reçoit un JWT portant role=livreur.
+  function livreurToken(livreur){
+    return jwt.sign(
+      { id: livreur.id, name: livreur.name, role: 'livreur' },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+  }
+
+  function requireAdmin(req, res, next){
+    if (!AMARITA_ADMIN_KEY) return res.status(503).json({ error: "AMARITA_ADMIN_KEY n'est pas configurée." });
+    const key = req.headers['x-amarita-admin-key'];
+    if (!key || key !== AMARITA_ADMIN_KEY) return res.status(401).json({ error: "Accès administrateur requis." });
+    next();
+  }
+
+  function authLivreur(req, res, next){
+    const header = req.headers.authorization || '';
+    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+    if (!token) return res.status(401).json({ error: "Connexion livreur requise." });
+    try {
+      const payload = jwt.verify(token, JWT_SECRET);
+      if (payload.role !== 'livreur') return res.status(403).json({ error: "Compte livreur requis." });
+      req.livreur = payload;
+      next();
+    } catch {
+      return res.status(401).json({ error: "Session livreur invalide ou expirée." });
+    }
+  }
+
+  // Candidature d'un livreur indépendant. Le mot de passe est facultatif
+  // pour préserver les anciennes candidatures ; il sera obligatoire pour
+  // ouvrir une session, après activation du compte.
   app.post('/api/livreurs', async (req, res) => {
     try {
-      const { name, phone, vehicule, zone } = req.body;
+      const { name, phone, email, password, vehicule, zone } = req.body;
       if (!name || !phone || !vehicule || !zone) {
-        return res.status(400).json({ error: "Tous les champs sont requis." });
+        return res.status(400).json({ error: "Nom, téléphone, véhicule et zone sont requis." });
       }
-      await livreurs.insertOne({
-        id: "l_" + Date.now(),
-        name, phone, vehicule, zone,
+      if (password && String(password).length < 8) {
+        return res.status(400).json({ error: "Le mot de passe doit faire au moins 8 caractères." });
+      }
+      const normalizedPhone = String(phone).trim();
+      const normalizedEmail = email ? String(email).trim().toLowerCase() : null;
+      if (await livreurs.findOne({ phone: normalizedPhone })) {
+        return res.status(409).json({ error: "Un compte/candidature existe déjà avec ce numéro." });
+      }
+      if (normalizedEmail && await livreurs.findOne({ email: normalizedEmail })) {
+        return res.status(409).json({ error: "Un compte/candidature existe déjà avec cet e-mail." });
+      }
+      const livreur = {
+        id: "l_" + crypto.randomUUID(),
+        name: String(name).trim(),
+        phone: normalizedPhone,
+        email: normalizedEmail,
+        vehicule: String(vehicule).trim(),
+        zone: String(zone).trim(),
         status: 'nouvelle_candidature',
+        available: false,
+        passwordHash: password ? bcrypt.hashSync(String(password), 12) : null,
         createdAt: new Date().toISOString()
-      });
-      res.json({ ok: true });
+      };
+      await livreurs.insertOne(livreur);
+      res.json({ ok: true, livreurId: livreur.id, status: livreur.status });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "Erreur serveur lors de l'envoi de la candidature." });
     }
   });
 
+  // Activation administrative après vérification de la candidature.
+  app.put('/api/livreurs/admin/:id/activation', requireAdmin, async (req, res) => {
+    try {
+      const { active, password } = req.body;
+      if (typeof active !== 'boolean') return res.status(400).json({ error: "active doit être true ou false." });
+      if (active && password && String(password).length < 8) return res.status(400).json({ error: "Mot de passe trop court." });
+      const update = { status: active ? 'actif' : 'refuse', available: false, updatedAt: new Date().toISOString() };
+      if (password) update.passwordHash = bcrypt.hashSync(String(password), 12);
+      const result = await livreurs.updateOne({ id: req.params.id }, { $set: update });
+      if (!result.matchedCount) return res.status(404).json({ error: "Livreur introuvable." });
+      res.json({ ok: true, status: update.status });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erreur serveur." });
+    }
+  });
+
+  app.post('/api/livreurs/login', async (req, res) => {
+    try {
+      const phone = String(req.body.phone || '').trim();
+      const password = String(req.body.password || '');
+      if (!phone || !password) return res.status(400).json({ error: "Téléphone et mot de passe requis." });
+      const livreur = await livreurs.findOne({ phone });
+      if (!livreur || livreur.status !== 'actif' || !livreur.passwordHash || !bcrypt.compareSync(password, livreur.passwordHash)) {
+        return res.status(401).json({ error: "Identifiants livreur incorrects ou compte non activé." });
+      }
+      const token = livreurToken(livreur);
+      res.json({ token, livreur: { id: livreur.id, name: livreur.name, phone: livreur.phone, zone: livreur.zone, vehicule: livreur.vehicule, available: !!livreur.available } });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erreur serveur lors de la connexion livreur." });
+    }
+  });
+
+  app.get('/api/livreurs/me', authLivreur, async (req, res) => {
+    const livreur = await livreurs.findOne({ id: req.livreur.id }, { projection: { _id: 0, passwordHash: 0 } });
+    if (!livreur) return res.status(404).json({ error: "Livreur introuvable." });
+    res.json({ livreur });
+  });
+
+  app.put('/api/livreurs/disponibilite', authLivreur, async (req, res) => {
+    try {
+      const { available } = req.body;
+      if (typeof available !== 'boolean') return res.status(400).json({ error: "available doit être true ou false." });
+      const result = await livreurs.updateOne(
+        { id: req.livreur.id, status: 'actif' },
+        { $set: { available, lastAvailabilityAt: new Date().toISOString() } }
+      );
+      if (!result.matchedCount) return res.status(404).json({ error: "Livreur actif introuvable." });
+      res.json({ ok: true, available });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erreur serveur." });
+    }
+  });
+
+  // Compatibilité avec l'ancien endpoint : il n'accepte plus un ID arbitraire.
+  app.put('/api/livreurs/:id/disponibilite', authLivreur, async (req, res) => {
+    try {
+      if (req.params.id !== req.livreur.id) return res.status(403).json({ error: "Vous ne pouvez modifier que votre propre disponibilité." });
+      const { available } = req.body;
+      if (typeof available !== 'boolean') return res.status(400).json({ error: "available doit être true ou false." });
+      const result = await livreurs.updateOne(
+        { id: req.livreur.id, status: 'actif' },
+        { $set: { available, lastAvailabilityAt: new Date().toISOString() } }
+      );
+      if (!result.matchedCount) return res.status(404).json({ error: "Livreur actif introuvable." });
+      res.json({ ok: true, available });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erreur serveur." });
+    }
+  });
+
+  // Crée une course. Cette opération est administrative/interne : elle exige
+  // la clé d'administration afin qu'un visiteur ne puisse pas injecter de
+  // fausses courses dans le réseau de livreurs.
+  app.post('/api/livraisons', requireAdmin, async (req, res) => {
+    try {
+      const { orderId, pickupZone, deliveryZone, pickupAddress, deliveryAddress, deliveryFee } = req.body;
+      if (!orderId || !pickupZone || !deliveryZone || !deliveryAddress) {
+        return res.status(400).json({ error: "Commande, zones et adresse de livraison requis." });
+      }
+      const order = await orders.findOne({ id: orderId });
+      if (!order) return res.status(404).json({ error: "Commande introuvable." });
+      const existing = await db.collection('livraisons').findOne({ orderId, status: { $nin: ['livree', 'annulee'] } });
+      if (existing) return res.status(409).json({ error: "Une course active existe déjà pour cette commande.", livraisonId: existing.id });
+      const course = {
+        id: "c_" + crypto.randomUUID(),
+        orderId,
+        pickupZone: String(pickupZone).trim(),
+        deliveryZone: String(deliveryZone).trim(),
+        pickupAddress: pickupAddress ? String(pickupAddress).trim() : null,
+        deliveryAddress: String(deliveryAddress).trim(),
+        deliveryFee: Math.max(0, Math.round(Number(deliveryFee) || 0)),
+        livreurId: null,
+        status: 'a_attribuer',
+        createdAt: new Date().toISOString()
+      };
+      await db.collection('livraisons').insertOne(course);
+      res.json({ ok: true, livraisonId: course.id, status: course.status });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erreur serveur lors de la création de la course." });
+    }
+  });
+
+  // Courses disponibles dans la zone du livreur connecté.
+  app.get('/api/livraisons/disponibles', authLivreur, async (req, res) => {
+    try {
+      const livreur = await livreurs.findOne({ id: req.livreur.id, status: 'actif', available: true });
+      if (!livreur) return res.status(403).json({ error: "Activez votre disponibilité pour voir les courses." });
+      const list = await db.collection('livraisons').find({
+        status: 'a_attribuer',
+        deliveryZone: livreur.zone
+      }, { projection: { _id: 0, deliveryAddress: 0 } }).sort({ createdAt: 1 }).toArray();
+      res.json({ livraisons: list });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erreur serveur." });
+    }
+  });
+
+  app.get('/api/livraisons/mes-courses', authLivreur, async (req, res) => {
+    const list = await db.collection('livraisons').find({ livreurId: req.livreur.id }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(100).toArray();
+    res.json({ livraisons: list });
+  });
+
+  // Un livreur actif accepte volontairement une course. Le filtre status=a_attribuer
+  // rend l'attribution atomique : le premier qui l'obtient gagne la course.
+  app.post('/api/livraisons/:id/accepter', authLivreur, async (req, res) => {
+    try {
+      const livreur = await livreurs.findOne({ id: req.livreur.id, status: 'actif', available: true });
+      if (!livreur) return res.status(403).json({ error: "Livreur non disponible ou non validé." });
+      const result = await db.collection('livraisons').findOneAndUpdate(
+        { id: req.params.id, status: 'a_attribuer' },
+        { $set: { livreurId: req.livreur.id, livreurName: req.livreur.name, livreurPhone: livreur.phone || null, status: 'acceptee', acceptedAt: new Date().toISOString(), updatedAt: new Date().toISOString() } },
+        { returnDocument: 'after', projection: { _id: 0 } }
+      );
+      if (!result) return res.status(409).json({ error: "Cette course vient d'être attribuée à un autre livreur." });
+      await livreurs.updateOne({ id: req.livreur.id }, { $set: { available: false } });
+      await logOrderEvent(result.orderId, 'acceptee', `Livreur ${req.livreur.name} attribué.`);
+      res.json({ ok: true, livraison: result });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erreur serveur lors de l'acceptation de la course." });
+    }
+  });
+
+  app.put('/api/livraisons/:id/position', authLivreur, async (req, res) => {
+    try {
+      const lat = Number(req.body.lat), lng = Number(req.body.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return res.status(400).json({ error: 'Position GPS invalide.' });
+      const course = await db.collection('livraisons').findOne({ id: req.params.id, livreurId: req.livreur.id, status: { $in: ['acceptee','recuperee','en_livraison'] } });
+      if (!course) return res.status(404).json({ error: 'Course active introuvable.' });
+      await db.collection('livraisons').updateOne({ id: course.id }, { $set: { currentLocation: { lat: Number(lat.toFixed(5)), lng: Number(lng.toFixed(5)), updatedAt: new Date().toISOString() }, updatedAt: new Date().toISOString() } });
+      res.json({ ok: true });
+    } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur lors de la mise à jour GPS.' }); }
+  });
+
+  app.put('/api/livraisons/:id/statut', authLivreur, async (req, res) => {
+    try {
+      const { status } = req.body;
+      const transitions = { acceptee: ['recuperee'], recuperee: ['en_livraison'], en_livraison: ['livree'] };
+      const course = await db.collection('livraisons').findOne({ id: req.params.id, livreurId: req.livreur.id });
+      if (!course) return res.status(404).json({ error: "Course introuvable pour ce livreur." });
+      if (!transitions[course.status] || !transitions[course.status].includes(status)) {
+        return res.status(409).json({ error: `Transition impossible : ${course.status} → ${status}.` });
+      }
+      await db.collection('livraisons').updateOne(
+        { id: course.id, livreurId: req.livreur.id, status: course.status },
+        { $set: { status, updatedAt: new Date().toISOString(), ...(status === 'recuperee' ? { pickedUpAt: new Date().toISOString() } : {}), ...(status === 'en_livraison' ? { inDeliveryAt: new Date().toISOString() } : {}), ...(status === 'livree' ? { deliveredAt: new Date().toISOString() } : {}) } }
+      );
+      if (status === 'livree') {
+        await livreurs.updateOne({ id: req.livreur.id }, { $set: { available: true } });
+        const courseNow = await db.collection('livraisons').findOne({ id: req.params.id });
+        if (courseNow) { await orders.updateOne({ id: courseNow.orderId }, { $set: { status: 'livree' } }); await logOrderEvent(courseNow.orderId, 'livree', 'Commande livrée.'); }
+      } else {
+        const courseNow = await db.collection('livraisons').findOne({ id: req.params.id });
+        if (courseNow) await logOrderEvent(courseNow.orderId, status, `Livraison : ${status}.`);
+      }
+      res.json({ ok: true, status });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erreur serveur lors de la mise à jour de la course." });
+    }
+  });
+
+  function publicOrder(order, delivery = null){
+    return {
+      id: order.id,
+      createdAt: order.createdAt,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      total: order.total,
+      paymentMethod: order.paymentMethod,
+      delivery: delivery ? {
+        pickupZone: delivery.pickupZone,
+        deliveryZone: delivery.deliveryZone,
+        fee: delivery.deliveryFee,
+        status: delivery.status,
+        livreur: delivery.livreurId ? { id: delivery.livreurId, name: delivery.livreurName || null, phone: delivery.livreurPhone || null } : null,
+        updatedAt: delivery.updatedAt || null,
+        currentLocation: delivery.currentLocation && ['acceptee','recuperee','en_livraison'].includes(delivery.status) ? delivery.currentLocation : null
+      } : null,
+      items: order.items.map(i => ({ name: i.name, price: i.price, qty: i.qty }))
+    };
+  }
+
+  async function logOrderEvent(orderId, type, message){
+    await orderEvents.insertOne({ id: crypto.randomUUID(), orderId, type, message, createdAt: new Date().toISOString() });
+  }
+
   // ---------- Commandes & commissions ----------
   // Enregistre une commande à partir du panier envoyé par le site.
   // Les prix ne sont JAMAIS pris depuis le panier du client : on relit
   // chaque produit en base pour connaître son vrai prix et son vendeur,
   // afin qu'un client ne puisse pas trafiquer le montant.
-  app.post('/api/orders', async (req, res) => {
+  app.post('/api/orders', rateLimit(60*1000, 20, 'orders'), async (req, res) => {
     try {
-      const { items, paymentMethod, affiliateCode } = req.body;
+      const { items, paymentMethod, affiliateCode, delivery, customer } = req.body;
       if (!Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ error: "Panier vide." });
       }
@@ -473,9 +775,6 @@ async function start(){
       if (orderItems.length === 0) {
         return res.status(400).json({ error: "Aucun produit valide dans ce panier." });
       }
-      if (!Number.isFinite(total) || total <= 0) {
-        return res.status(400).json({ error: "Montant de commande invalide." });
-      }
 
       // Le taux de base dépend du type de chaque vendeur (grossiste 3% / détail 10%).
       const bySellerBreakdown = [];
@@ -494,24 +793,96 @@ async function start(){
         });
       }
 
+      const deliveryFee = delivery && delivery.address ? Math.max(0, Math.round(Number(delivery.fee) || 0)) : 0;
       const order = {
         id: "o_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
         items: orderItems,
-        total,
+        total: total + deliveryFee,
+        productSubtotal: total,
+        deliveryFee,
         paymentMethod: paymentMethod || 'whatsapp',
         bySeller: bySellerBreakdown,
         affiliateId: influencer ? influencer.id : null,
         affiliateCode: influencer ? influencer.code : null,
         hasAffiliate: !!influencer,
-        status: 'nouvelle', // à faire évoluer manuellement plus tard : livrée / payée au vendeur
+        status: 'nouvelle',
+        paymentStatus: 'en_attente',
+        customer: customer ? { name: String(customer.name || '').trim().slice(0,120), phone: String(customer.phone || '').trim().slice(0,40) } : null,
+        trackingToken: crypto.randomBytes(24).toString('hex'),
+        delivery: delivery && delivery.address ? {
+          pickupZone: String(delivery.pickupZone || '').trim(),
+          deliveryZone: String(delivery.deliveryZone || '').trim(),
+          pickupAddress: delivery.pickupAddress ? String(delivery.pickupAddress).trim() : null,
+          address: String(delivery.address).trim(),
+          fee: deliveryFee
+        } : null,
         createdAt: new Date().toISOString()
       };
       await orders.insertOne(order);
-      res.json({ orderId: order.id, total: order.total });
+      await logOrderEvent(order.id, 'commande_creee', 'Commande enregistrée.');
+
+      // Si le client fournit une adresse, on prépare immédiatement la course,
+      // mais elle reste invisible aux livreurs tant que le paiement n'est pas
+      // confirmé. Cela évite qu'un livreur accepte une course non payée.
+      if (order.delivery && order.delivery.deliveryZone) {
+        await db.collection('livraisons').insertOne({
+          id: 'c_' + crypto.randomUUID(),
+          orderId: order.id,
+          pickupZone: order.delivery.pickupZone || 'À définir',
+          deliveryZone: order.delivery.deliveryZone,
+          pickupAddress: order.delivery.pickupAddress,
+          deliveryAddress: order.delivery.address,
+          deliveryFee: order.delivery.fee,
+          livreurId: null,
+          status: 'en_attente_paiement',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+      res.json({ orderId: order.id, total: order.total, trackingToken: order.trackingToken });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "Erreur serveur lors de l'enregistrement de la commande." });
     }
+  });
+
+  // ---------- Expérience client : suivi, avis et assistance ----------
+  app.get('/api/orders/track/:token', async (req, res) => {
+    try {
+      const order = await orders.findOne({ trackingToken: req.params.token }, { projection: { _id: 0, trackingToken: 0, bySeller: 0, affiliateId: 0, affiliateCode: 0 } });
+      if (!order) return res.status(404).json({ error: 'Commande introuvable.' });
+      const delivery = await db.collection('livraisons').findOne({ orderId: order.id }, { projection: { _id: 0, deliveryAddress: 0, pickupAddress: 0 } });
+      const events = await orderEvents.find({ orderId: order.id }, { projection: { _id: 0, orderId: 0 } }).sort({ createdAt: 1 }).toArray();
+      const review = await reviews.findOne({ orderId: order.id }, { projection: { _id: 0 } });
+      res.json({ order: publicOrder(order, delivery), events, review });
+    } catch (err) {
+      console.error(err); res.status(500).json({ error: 'Erreur lors du suivi de la commande.' });
+    }
+  });
+
+  app.post('/api/orders/:id/review', async (req, res) => {
+    try {
+      const { trackingToken, rating, deliveryRating, comment } = req.body;
+      const order = await orders.findOne({ id: req.params.id, trackingToken });
+      if (!order) return res.status(403).json({ error: 'Commande non autorisée.' });
+      if (order.status !== 'livree') return res.status(400).json({ error: 'L’avis sera disponible après la livraison.' });
+      const r = Math.max(1, Math.min(5, Number(rating)));
+      const dr = deliveryRating == null ? null : Math.max(1, Math.min(5, Number(deliveryRating)));
+      await reviews.updateOne({ orderId: order.id }, { $set: { orderId: order.id, rating: r, deliveryRating: dr, comment: String(comment || '').trim().slice(0,1000), createdAt: new Date().toISOString() } }, { upsert: true });
+      res.json({ ok: true });
+    } catch (err) { console.error(err); res.status(500).json({ error: 'Impossible d’enregistrer l’avis.' }); }
+  });
+
+  app.post('/api/support', rateLimit(60*1000, 10, 'support'), async (req, res) => {
+    try {
+      const { trackingToken, orderId, category, message, phone } = req.body;
+      if (!message || !String(message).trim()) return res.status(400).json({ error: 'Message requis.' });
+      let verifiedOrder = null;
+      if (orderId && trackingToken) verifiedOrder = await orders.findOne({ id: orderId, trackingToken });
+      const ticket = { id: 't_' + crypto.randomUUID(), orderId: verifiedOrder ? verifiedOrder.id : null, category: String(category || 'autre').slice(0,60), message: String(message).trim().slice(0,2000), phone: String(phone || '').trim().slice(0,40), status: 'ouvert', createdAt: new Date().toISOString() };
+      await supportTickets.insertOne(ticket);
+      res.json({ ok: true, ticketId: ticket.id });
+    } catch (err) { console.error(err); res.status(500).json({ error: 'Impossible d’ouvrir la demande d’assistance.' }); }
   });
 
   // Un vendeur connecté voit ses propres commandes et ce qui lui est dû (90%).
@@ -658,14 +1029,15 @@ async function start(){
 
       const order = await orders.findOne({ id: ref_command });
       if (!order) return res.status(200).send("IPN OK (commande introuvable, ignorée)");
-      const callbackAmount = Number(item_price);
-      if (!Number.isFinite(callbackAmount) || callbackAmount !== Number(order.total)) {
-        console.error("IPN PayTech refusée : montant différent de la commande", { orderId: ref_command, expected: order.total, received: item_price });
-        return res.status(400).send("IPN KO — montant invalide");
-      }
 
       if (type_event === 'sale_complete') {
-        await orders.updateOne({ id: ref_command }, { $set: { paymentStatus: 'payee' } });
+        await orders.updateOne({ id: ref_command }, { $set: { paymentStatus: 'payee', status: 'payee' } });
+        await logOrderEvent(ref_command, 'paiement_confirme', 'Paiement confirmé.');
+        await logOrderEvent(ref_command, 'a_attribuer', 'La commande est disponible pour attribution à un livreur.');
+        await db.collection('livraisons').updateOne(
+          { orderId: ref_command, status: 'en_attente_paiement' },
+          { $set: { status: 'a_attribuer', paymentConfirmedAt: new Date().toISOString(), updatedAt: new Date().toISOString() } }
+        );
         // Virement automatique à chaque vendeur de la commande.
         for (const s of order.bySeller) {
           await payoutSeller(ref_command, s.sellerId);
@@ -715,7 +1087,7 @@ async function start(){
   // du site continue de fonctionner normalement.
   const CAT_LABELS = { mode: "Mode & Vêtements", beaute: "Beauté & Bien-être", epicerie: "Épicerie & Alimentation", artisanat: "Artisanat & Maison", fournitures: "Fournitures", immobilier: "Immobilier" };
 
-  app.post('/api/assistant/chat', async (req, res) => {
+  app.post('/api/assistant/chat', rateLimit(60*1000, 20, 'assistant_chat'), async (req, res) => {
     try {
       if (!ANTHROPIC_API_KEY) {
         return res.status(503).json({ error: "L'assistant n'est pas encore activé sur ce site (clé API à configurer)." });

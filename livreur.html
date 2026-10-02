@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Amarita — Espace livreur</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:760px;margin:auto;padding:24px;background:#f7f3ee;color:#1e1b2e}h1{margin-bottom:4px}.card{background:#fff;border-radius:18px;padding:20px;margin:16px 0;box-shadow:0 5px 24px #00000012}input,button{width:100%;box-sizing:border-box;padding:12px;margin:6px 0;border-radius:10px;border:1px solid #ddd}button{cursor:pointer;font-weight:700}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.course{border:1px solid #ddd;border-radius:14px;padding:14px;margin:10px 0}.muted{color:#6b6872}.hidden{display:none}.ok{font-weight:700}.danger{color:#a22}.status{display:inline-block;padding:5px 9px;border-radius:999px;background:#eee}
+</style></head>
+<body>
+<h1>🚴 Amarita — Espace livreur</h1><p class="muted">Réseau de livreurs indépendants partenaires</p>
+<section id="login" class="card"><h2>Connexion</h2><input id="phone" placeholder="Téléphone"><input id="password" type="password" placeholder="Mot de passe"><button onclick="login()">Se connecter</button><p id="loginMsg"></p></section>
+<section id="app" class="hidden">
+<div class="card"><h2 id="hello"></h2><p>Statut : <span id="availability" class="status">hors ligne</span></p><div class="row"><button onclick="setAvailability(true)">🟢 Je suis disponible</button><button onclick="setAvailability(false)">⚪ Je suis indisponible</button></div><p id="msg"></p></div>
+<div class="card"><h2>📦 Courses disponibles</h2><button onclick="loadAvailable()">Actualiser</button><div id="available"></div></div>
+<div class="card"><h2>🛵 Mes courses</h2><button onclick="loadMine()">Actualiser</button><div id="mine"></div></div>
+</section>
+<script>
+const api='';let token=localStorage.getItem('amaritaLivreurToken');let me=null;
+const headers=()=>({'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})});
+async function apiCall(path,opt={}){const r=await fetch(api+path,{...opt,headers:{...headers(),...(opt.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Erreur serveur');return d;}
+async function login(){try{const d=await apiCall('/api/livreurs/login',{method:'POST',body:JSON.stringify({phone:phone.value,password:password.value})});token=d.token;localStorage.setItem('amaritaLivreurToken',token);showApp(d.livreur);await loadAvailable();await loadMine();}catch(e){loginMsg.textContent=e.message;loginMsg.className='danger';}}
+function showApp(x){me=x;login.classList.add('hidden');app.classList.remove('hidden');hello.textContent='Bonjour '+x.name+' 👋';setAvailText(x.available);}
+function setAvailText(v){availability.textContent=v?'🟢 disponible':'⚪ indisponible';}
+async function setAvailability(v){try{const d=await apiCall('/api/livreurs/disponibilite',{method:'PUT',body:JSON.stringify({available:v})});setAvailText(d.available);msg.textContent=v?'Tu recevras les courses de ta zone.':'Tu ne recevras plus de nouvelles courses.';await loadAvailable();}catch(e){msg.textContent=e.message;}}
+async function loadAvailable(){try{const d=await apiCall('/api/livraisons/disponibles');available.innerHTML=d.livraisons.length?d.livraisons.map(c=>`<div class="course"><b>Course ${c.id.slice(-8)}</b><p>${c.pickupZone} → ${c.deliveryZone}</p><p>💰 ${c.deliveryFee} FCFA</p><button onclick="acceptCourse('${c.id}')">Accepter la course</button></div>`).join(''):'<p class="muted">Aucune course disponible pour le moment.</p>';}catch(e){available.innerHTML='<p class="muted">'+e.message+'</p>';}}
+async function acceptCourse(id){try{await apiCall('/api/livraisons/'+id+'/accepter',{method:'POST',body:'{}'});await loadMine();await loadAvailable();}catch(e){alert(e.message);}}
+let gpsTimer=null;
+function startGPS(courseId){ if(!navigator.geolocation)return; stopGPS(); gpsTimer=setInterval(()=>navigator.geolocation.getCurrentPosition(pos=>apiCall('/api/livraisons/'+courseId+'/position',{method:'PUT',body:JSON.stringify({lat:pos.coords.latitude,lng:pos.coords.longitude})}).catch(()=>{}),()=>{}, {enableHighAccuracy:true,maximumAge:10000,timeout:8000}),15000); }
+function stopGPS(){if(gpsTimer){clearInterval(gpsTimer);gpsTimer=null;}}
+const next={acceptee:['recuperee','📦 Marquer comme récupérée'],recuperee:['en_livraison','🚚 Départ en livraison'],en_livraison:['livree','✅ Livraison effectuée']};
+async function loadMine(){try{const d=await apiCall('/api/livraisons/mes-courses');mine.innerHTML=d.livraisons.length?d.livraisons.map(c=>{const n=next[c.status];return `<div class="course"><b>${c.id.slice(-8)}</b><p>${c.pickupZone} → ${c.deliveryZone}</p><p>Statut : <span class="status">${c.status}</span></p><p>${c.deliveryAddress||''}</p>${n?`<button onclick="advance('${c.id}','${n[0]}')">${n[1]}</button>`:''}</div>`}).join(''):'<p class="muted">Aucune course.</p>';}catch(e){mine.innerHTML='<p class="muted">'+e.message+'</p>';}}
+async function advance(id,status){try{await apiCall('/api/livraisons/'+id+'/statut',{method:'PUT',body:JSON.stringify({status})});if(status==='en_livraison')startGPS(id);if(status==='livree')stopGPS();await loadMine();if(status==='livree')await setAvailability(true);}catch(e){alert(e.message);}}
+if(token){apiCall('/api/livreurs/me').then(d=>showApp(d.livreur)).then(()=>{loadAvailable();loadMine();}).catch(()=>{localStorage.removeItem('amaritaLivreurToken');token=null;});}
+</script></body></html>
