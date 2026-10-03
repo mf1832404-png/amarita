@@ -1,23 +1,26 @@
 <!DOCTYPE html>
 <!--
-  SEO Amarita : version optimisée pour l'indexation Google sur amarita.onrender.com.
-  Lors du passage à un domaine personnalisé, remplacer les URL canoniques/OG et le sitemap.
+  AVANT DE PUBLIER — à vérifier/remplacer :
+  1. og:url ci-dessous : remplacer par le vrai nom de domaine une fois le site hébergé.
+  2. Numéro WhatsApp (WHATSAPP_NUMBER) : confirmer qu'il s'agit bien du bon numéro.
+  Ce fichier doit être déployé avec amarita-backend.js et package.json
+  (voir ces fichiers) — les deux ensemble forment un seul site complet.
 -->
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Amarita — Marketplace sénégalaise | Achetez et vendez en ligne</title>
-<meta name="description" content="Amarita est une marketplace sénégalaise pour acheter et vendre en ligne : mode, beauté, épicerie, artisanat et autres produits, avec paiements adaptés au Sénégal et livraison.">
+<meta name="description" content="Amarita est une marketplace sénégalaise pour acheter et vendre en ligne, avec paiements locaux et livraison par des livreurs indépendants.">
+<meta name="google-site-verification" content="N2eQFdO407sGljP7ovXZyb4GJPdRzlD1GtM8wOGoe7s">
 <meta name="robots" content="index, follow, max-image-preview:large">
-<meta name="googlebot" content="index, follow">
 <link rel="canonical" href="https://amarita.onrender.com/">
 <meta name="theme-color" content="#2D1449">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="fr_FR">
 <meta property="og:title" content="Amarita — Marketplace sénégalaise">
-<meta property="og:description" content="Achetez et vendez en ligne au Sénégal avec Amarita : produits, paiements et livraison.">
-<meta property="og:url" content="https://amarita.onrender.com">
+<meta property="og:description" content="Achetez et vendez en ligne au Sénégal avec Amarita : marketplace, paiements locaux et livraison indépendante.">
+<meta property="og:url" content="https://amarita.onrender.com/">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8D%83%3C/text%3E%3C/svg%3E">
 <script type="application/ld+json">
 {
@@ -26,14 +29,11 @@
   "name":"Amarita",
   "alternateName":"Amarita Marketplace",
   "url":"https://amarita.onrender.com/",
-  "description":"Marketplace sénégalaise permettant d’acheter et de vendre en ligne, avec paiements adaptés au Sénégal et livraison.",
-  "areaServed":{
-    "@type":"Country",
-    "name":"Sénégal"
-  },
-  "sameAs":[]
+  "description":"Marketplace sénégalaise pour acheter et vendre en ligne, avec paiements locaux et livraison par des livreurs indépendants.",
+  "areaServed":{"@type":"Country","name":"Sénégal"}
 }
 </script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&family=Work+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script type="text/javascript" src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js" defer></script>
@@ -707,6 +707,7 @@
       <textarea id="deliveryAddress" rows="2" placeholder="Adresse ou point de livraison précis"></textarea>
       <input id="pickupZone" type="text" placeholder="Zone de retrait (facultatif)">
       <p style="font-size:.72rem;color:#5a6a70;margin:5px 0 0;">Ces informations servent à préparer la livraison. Ne partagez pas de données sensibles inutiles.</p>
+      <label class="legal-check" style="margin-top:8px;"><input id="customerLegalConsent" type="checkbox"> <span>J’accepte les <a href="/conditions.html" target="_blank" rel="noopener noreferrer">Conditions d’utilisation</a> et j’ai pris connaissance de la <a href="/confidentialite.html" target="_blank" rel="noopener noreferrer">Politique de confidentialité</a>.</span></label>
     </div>
     <div class="customer-actions">
       <button type="button" onclick="openTracking()">📍 Suivre une commande</button>
@@ -1236,7 +1237,9 @@ async function handleSignup(e){
         name: form.name.value.trim(),
         email: form.email.value.trim(),
         password: form.password.value,
-        sellerType: form.sellerType.value
+        sellerType: form.sellerType.value,
+        acceptedTerms: !!form.acceptedTerms.checked,
+        acceptedPrivacy: !!form.acceptedPrivacy.checked
       })
     });
     const data = await res.json();
@@ -1501,7 +1504,7 @@ async function goToPaytech(orderId){
     const res = await fetch(`${API_BASE}/api/paytech/request-payment`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ orderId })
+      body: JSON.stringify({ orderId, trackingToken: localStorage.getItem('amarita_last_order') ? JSON.parse(localStorage.getItem('amarita_last_order')).trackingToken : null })
     });
     const data = await res.json();
     if(!res.ok || !data.redirect_url) throw new Error(data.error || "PayTech indisponible.");
@@ -1513,11 +1516,9 @@ async function goToPaytech(orderId){
   }
 }
 
-// Enregistre la commande côté serveur AVANT le paiement, pour que la
-// commission (10%) et la part due à chaque vendeur (90%) soient calculées
-// et gardées en mémoire — même si le paiement lui-même (WhatsApp/Wave/Orange)
-// se termine hors du site. Si le serveur ne répond pas, la commande continue
-// quand même (le client ne doit jamais être bloqué par un souci technique).
+// Enregistre la commande côté serveur AVANT le paiement. Si le serveur
+// refuse l’enregistrement, le paiement n’est jamais lancé afin d’éviter une
+// transaction sans commande traçable.
 async function recordOrder(paymentMethod){
   const items = cart.map(i => ({ productId: i.id, qty: i.qty }));
   const customer = {
@@ -1533,10 +1534,13 @@ async function recordOrder(paymentMethod){
   if(!customer.name || !customer.phone || !delivery.deliveryZone || !delivery.address){
     return { error: 'Renseignez votre nom, téléphone, zone et adresse de livraison.' };
   }
+  if(!document.getElementById('customerLegalConsent')?.checked){
+    return { error: 'Veuillez accepter les Conditions d’utilisation et prendre connaissance de la Politique de confidentialité.' };
+  }
   try {
     const res = await fetch(`${API_BASE}/api/orders`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ items, paymentMethod, affiliateCode, customer, delivery })
+      body: JSON.stringify({ items, paymentMethod, affiliateCode, customer, delivery, acceptedTerms: !!document.getElementById('customerLegalConsent')?.checked, acceptedPrivacy: !!document.getElementById('customerLegalConsent')?.checked })
     });
     const data = await res.json();
     if(res.ok){
