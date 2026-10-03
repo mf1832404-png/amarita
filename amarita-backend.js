@@ -53,41 +53,6 @@ const { MongoClient } = require('mongodb');
 const appleSignin = require('apple-signin-auth');
 
 const app = express();
-
-// En-têtes de sécurité de base sans dépendance externe.
-app.disable('x-powered-by');
-app.use((req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
-  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  }
-  next();
-});
-
-// Limiteur simple par IP pour les endpoints sensibles. Il protège contre
-// les rafales accidentelles/brute-force sans ajouter de dépendance npm.
-const rateBuckets = new Map();
-function rateLimit({ windowMs = 60_000, max = 30 } = {}) {
-  return (req, res, next) => {
-    const now = Date.now();
-    const key = `${req.ip}:${req.path}`;
-    let bucket = rateBuckets.get(key);
-    if (!bucket || now - bucket.start >= windowMs) {
-      bucket = { start: now, count: 0 };
-      rateBuckets.set(key, bucket);
-    }
-    bucket.count += 1;
-    if (bucket.count > max) return res.status(429).json({ error: 'Trop de requêtes. Réessayez dans un instant.' });
-    next();
-  };
-}
-setInterval(() => {
-  const cutoff = Date.now() - 5 * 60_000;
-  for (const [key, bucket] of rateBuckets) if (bucket.start < cutoff) rateBuckets.delete(key);
-}, 60_000).unref();
 // Render fait transiter les requêtes via un proxy en HTTPS→HTTP ; sans cette
 // ligne, req.protocol renverrait "http" même en production, et PayTech
 // refuse les URL de notification qui ne sont pas en https.
@@ -99,11 +64,7 @@ app.use(express.urlencoded({ extended: true })); // les notifications IPN PayTec
 // directement à la racine du site.
 app.use(express.static(__dirname, { index: 'index.html' }));
 
-const JWT_SECRET = (process.env.JWT_SECRET || '').trim();
-if (process.env.NODE_ENV === 'production' && JWT_SECRET.length < 32) {
-  console.error('ERREUR: JWT_SECRET doit être défini et contenir au moins 32 caractères en production.');
-  process.exit(1);
-}
+const JWT_SECRET = process.env.JWT_SECRET || "change-moi-absolument-avant-de-publier";
 // .trim() est important : coller une variable d'environnement depuis un
 // clavier de téléphone laisse parfois un espace ou un retour à la ligne
 // invisible au début/à la fin, ce qui suffit à faire échouer l'authentification
@@ -189,16 +150,8 @@ async function start(){
   const products = db.collection('products');
   const orders = db.collection('orders');
   const livreurs = db.collection('livreurs');
-  const deliveries = db.collection('livraisons');
-  const reviews = db.collection('reviews');
-  const supportTickets = db.collection('support_tickets');
   const influenceurs = db.collection('influenceurs');
   await influenceurs.createIndex({ code: 1 }, { unique: true });
-  await livreurs.createIndex({ id: 1 }, { unique: true });
-  await deliveries.createIndex({ id: 1 }, { unique: true });
-  await deliveries.createIndex({ orderId: 1 });
-  await reviews.createIndex({ orderId: 1 }, { unique: true });
-  await supportTickets.createIndex({ ticketId: 1 }, { unique: true });
 
   // Une même adresse e-mail ne peut créer qu'un seul compte vendeur
   // (que ce soit par mot de passe ou par Apple).
@@ -211,7 +164,7 @@ async function start(){
   // ---------- Comptes vendeurs ----------
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  app.post('/api/auth/signup', rateLimit({windowMs:60_000,max:10}), async (req, res) => {
+  app.post('/api/auth/signup', async (req, res) => {
     try {
       const { name, email, password, sellerType, payoutPhone, payoutService } = req.body;
       if (!name || !email || !password) {
@@ -220,8 +173,8 @@ async function start(){
       if (!EMAIL_RE.test(email)) {
         return res.status(400).json({ error: "Adresse e-mail invalide." });
       }
-      if (password.length < 8) {
-        return res.status(400).json({ error: "Le mot de passe doit faire au moins 8 caractères." });
+      if (password.length < 6) {
+        return res.status(400).json({ error: "Le mot de passe doit faire au moins 6 caractères." });
       }
       const existing = await sellers.findOne({ email });
       if (existing) {
@@ -235,11 +188,11 @@ async function start(){
         payoutPhone: payoutPhone || null,
         payoutService: payoutService || null, // "Orange Money Senegal" | "Wave Senegal" | "Free Money Senegal"
         authProvider: 'local',
-        passwordHash: bcrypt.hashSync(password, 12),
+        passwordHash: bcrypt.hashSync(password, 10),
         createdAt: new Date().toISOString()
       };
       await sellers.insertOne(seller);
-      const token = jwt.sign({ id: seller.id, name: seller.name }, JWT_SECRET, { expiresIn: '7d' });
+      const token = jwt.sign({ id: seller.id, name: seller.name }, JWT_SECRET, { expiresIn: '90d' });
       res.json({ token, seller: { id: seller.id, name: seller.name } });
     } catch (err) {
       console.error(err);
@@ -247,14 +200,14 @@ async function start(){
     }
   });
 
-  app.post('/api/auth/login', rateLimit({windowMs:60_000,max:10}), async (req, res) => {
+  app.post('/api/auth/login', async (req, res) => {
     try {
       const { email, password } = req.body;
       const seller = await sellers.findOne({ email });
       if (!seller || seller.authProvider === 'apple' || !bcrypt.compareSync(password || '', seller.passwordHash || '')) {
         return res.status(401).json({ error: "E-mail ou mot de passe incorrect." });
       }
-      const token = jwt.sign({ id: seller.id, name: seller.name }, JWT_SECRET, { expiresIn: '7d' });
+      const token = jwt.sign({ id: seller.id, name: seller.name }, JWT_SECRET, { expiresIn: '90d' });
       res.json({ token, seller: { id: seller.id, name: seller.name } });
     } catch (err) {
       console.error(err);
@@ -298,7 +251,7 @@ async function start(){
         };
         await sellers.insertOne(seller);
       }
-      const token = jwt.sign({ id: seller.id, name: seller.name }, JWT_SECRET, { expiresIn: '7d' });
+      const token = jwt.sign({ id: seller.id, name: seller.name }, JWT_SECRET, { expiresIn: '90d' });
       res.json({ token, seller: { id: seller.id, name: seller.name } });
     } catch (err) {
       console.error(err);
@@ -328,7 +281,7 @@ async function start(){
         return res.status(400).json({ error: "Format de photo invalide." });
       }
       const product = {
-        id: "p_" + crypto.randomUUID(),
+        id: "p_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
         sellerId: req.seller.id,
         sellerName: req.seller.name,
         name,
@@ -457,79 +410,24 @@ async function start(){
     }
   });
 
-  function courierToken(livreur){
-    return jwt.sign({ id: livreur.id, name: livreur.name, role: 'livreur' }, JWT_SECRET, { expiresIn: '30d' });
-  }
-  function authLivreur(req, res, next){
-    const header = req.headers.authorization || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-    if (!token) return res.status(401).json({ error: 'Connexion livreur requise.' });
-    try {
-      const payload = jwt.verify(token, JWT_SECRET);
-      if (payload.role !== 'livreur') return res.status(403).json({ error: 'Accès réservé aux livreurs.' });
-      req.livreur = payload; next();
-    } catch { return res.status(401).json({ error: 'Session livreur invalide.' }); }
-  }
-  function requireAdmin(req,res,next){
-    const key=(process.env.AMARITA_ADMIN_KEY||'').trim();
-    if(!key || req.headers['x-amarita-admin-key'] !== key) return res.status(403).json({error:'Accès administrateur requis.'});
-    next();
-  }
-
   app.post('/api/livreurs', async (req, res) => {
     try {
-      const { name, phone, vehicule, zone, email, password } = req.body;
-      if (!name || !phone || !vehicule || !zone) return res.status(400).json({ error: 'Tous les champs sont requis.' });
-      if (password && String(password).length < 8) return res.status(400).json({error:'Le mot de passe doit contenir au moins 8 caractères.'});
-      const exists = await livreurs.findOne({ phone: String(phone).trim() });
-      if (exists) return res.status(409).json({error:'Ce numéro est déjà utilisé pour une candidature ou un compte livreur.'});
-      const hash = password ? await bcrypt.hash(String(password), 12) : null;
-      const id='l_'+crypto.randomUUID();
-      await livreurs.insertOne({id,name:String(name).trim(),phone:String(phone).trim(),email:email?String(email).trim().toLowerCase():null,vehicule:String(vehicule),zone:String(zone).trim(),passwordHash:hash,status:'nouvelle_candidature',available:false,createdAt:new Date().toISOString()});
-      res.json({ok:true,id});
-    } catch(err){ console.error(err); res.status(500).json({error:"Erreur serveur lors de l'envoi de la candidature."}); }
+      const { name, phone, vehicule, zone } = req.body;
+      if (!name || !phone || !vehicule || !zone) {
+        return res.status(400).json({ error: "Tous les champs sont requis." });
+      }
+      await livreurs.insertOne({
+        id: "l_" + Date.now(),
+        name, phone, vehicule, zone,
+        status: 'nouvelle_candidature',
+        createdAt: new Date().toISOString()
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erreur serveur lors de l'envoi de la candidature." });
+    }
   });
-  app.put('/api/livreurs/admin/:id/activation', requireAdmin, async (req,res)=>{
-    const active=req.body.active===true;
-    const password=req.body.password?String(req.body.password):null;
-    if(active && password && password.length<8) return res.status(400).json({error:'Mot de passe trop court.'});
-    const set={status:active?'actif':'refuse'};
-    if(active) set.available=false;
-    if(password) set.passwordHash=await bcrypt.hash(password,12);
-    const r=await livreurs.updateOne({id:req.params.id},{$set:set});
-    if(!r.matchedCount)return res.status(404).json({error:'Livreur introuvable.'});
-    res.json({ok:true,status:set.status});
-  });
-  app.post('/api/livreurs/login', rateLimit({windowMs:60_000,max:10}), async(req,res)=>{
-    const phone=String(req.body.phone||'').trim(), password=String(req.body.password||'');
-    const l=await livreurs.findOne({phone,status:'actif'});
-    if(!l || !l.passwordHash || !(await bcrypt.compare(password,l.passwordHash))) return res.status(401).json({error:'Identifiants invalides ou compte non activé.'});
-    res.json({token:courierToken(l),livreur:{id:l.id,name:l.name,phone:l.phone,zone:l.zone,vehicule:l.vehicule,available:!!l.available}});
-  });
-  app.get('/api/livreurs/me', authLivreur, async(req,res)=>{ const l=await livreurs.findOne({id:req.livreur.id},{projection:{_id:0,passwordHash:0}}); if(!l)return res.status(404).json({error:'Livreur introuvable.'}); res.json({livreur:l}); });
-  app.put('/api/livreurs/disponibilite', authLivreur, async(req,res)=>{ const available=req.body.available===true; await livreurs.updateOne({id:req.livreur.id},{$set:{available}}); res.json({ok:true,available}); });
-  app.get('/api/livraisons/disponibles', authLivreur, async(req,res)=>{
-    const l=await livreurs.findOne({id:req.livreur.id});
-    if(!l || l.status!=='actif') return res.status(403).json({error:'Compte livreur inactif.'});
-    const list=await deliveries.find({status:'a_attribuer',deliveryZone:l.zone},{projection:{_id:0,deliveryAddress:0,customerPhone:0}}).sort({createdAt:1}).limit(50).toArray();
-    res.json({livraisons:list});
-  });
-  app.get('/api/livraisons/mes-courses',authLivreur,async(req,res)=>res.json({livraisons:await deliveries.find({livreurId:req.livreur.id},{projection:{_id:0}}).sort({createdAt:-1}).limit(100).toArray()}));
-  app.post('/api/livraisons/:id/accepter',authLivreur,async(req,res)=>{
-    const l=await livreurs.findOne({id:req.livreur.id}); if(!l||l.status!=='actif'||!l.available)return res.status(400).json({error:'Vous devez être actif et disponible.'});
-    const now=new Date().toISOString(); const r=await deliveries.findOneAndUpdate({id:req.params.id,status:'a_attribuer',deliveryZone:l.zone},{$set:{livreurId:l.id,status:'acceptee',acceptedAt:now,'livreur':{name:l.name,phone:l.phone}}},{returnDocument:'after'});
-    if(!r)return res.status(409).json({error:'Cette course vient d’être prise par un autre livreur.'});
-    await livreurs.updateOne({id:l.id},{$set:{available:false}}); await orders.updateOne({id:r.orderId},{$set:{'delivery.status':'acceptee','delivery.livreur':{name:l.name,phone:l.phone}},$push:{events:{type:'acceptee',at:now}}}); res.json({ok:true,livraison:r});
-  });
-  app.put('/api/livraisons/:id/statut',authLivreur,async(req,res)=>{
-    const next=String(req.body.status||''); const allowed={acceptee:'recuperee',recuperee:'en_livraison',en_livraison:'livree'};
-    const current=await deliveries.findOne({id:req.params.id,livreurId:req.livreur.id}); if(!current)return res.status(404).json({error:'Course introuvable.'});
-    if(allowed[current.status]!==next)return res.status(400).json({error:`Transition invalide : ${current.status} → ${next}.`});
-    const now=new Date().toISOString(); const set={status:next}; if(next==='recuperee')set.pickedUpAt=now; if(next==='en_livraison')set.inDeliveryAt=now; if(next==='livree')set.deliveredAt=now;
-    await deliveries.updateOne({id:current.id},{$set:set}); await orders.updateOne({id:current.orderId},{$set:{'delivery.status':next},$push:{events:{type:next,at:now}}}); if(next==='livree')await livreurs.updateOne({id:req.livreur.id},{$set:{available:true}}); res.json({ok:true,status:next});
-  });
-  app.put('/api/livraisons/:id/position',authLivreur,async(req,res)=>{ const lat=Number(req.body.lat),lng=Number(req.body.lng); if(!Number.isFinite(lat)||!Number.isFinite(lng)||lat<-90||lat>90||lng<-180||lng>180)return res.status(400).json({error:'Position invalide.'}); const d=await deliveries.findOne({id:req.params.id,livreurId:req.livreur.id,status:'en_livraison'}); if(!d)return res.status(404).json({error:'Course non active.'}); const loc={lat,lng,updatedAt:new Date().toISOString()}; await deliveries.updateOne({id:d.id},{$set:{currentLocation:loc}}); await orders.updateOne({id:d.orderId},{$set:{'delivery.currentLocation':loc}}); res.json({ok:true}); });
-
 
   // ---------- Commandes & commissions ----------
   // Enregistre une commande à partir du panier envoyé par le site.
@@ -538,7 +436,7 @@ async function start(){
   // afin qu'un client ne puisse pas trafiquer le montant.
   app.post('/api/orders', async (req, res) => {
     try {
-      const { items, paymentMethod, affiliateCode, customer, delivery } = req.body;
+      const { items, paymentMethod, affiliateCode } = req.body;
       if (!Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ error: "Panier vide." });
       }
@@ -552,14 +450,14 @@ async function start(){
 
       const bySeller = {}; // sellerId -> { sellerId, sellerName, subtotal }
       const orderItems = [];
-      let subtotal = 0;
+      let total = 0;
 
       for (const it of items) {
         const product = await products.findOne({ id: it.productId });
         if (!product) continue;
         const qty = Math.max(1, Number(it.qty) || 1);
         const lineTotal = product.price * qty;
-        subtotal += lineTotal;
+        total += lineTotal;
         orderItems.push({ productId: product.id, name: product.name, price: product.price, qty, sellerId: product.sellerId, sellerName: product.sellerName });
         if (!bySeller[product.sellerId]) {
           bySeller[product.sellerId] = { sellerId: product.sellerId, sellerName: product.sellerName, subtotal: 0 };
@@ -571,8 +469,6 @@ async function start(){
         return res.status(400).json({ error: "Aucun produit valide dans ce panier." });
       }
 
-      const deliveryFee = delivery && Number.isFinite(Number(delivery.fee)) ? Math.max(0, Math.round(Number(delivery.fee))) : 0;
-      const total = subtotal + deliveryFee;
       // Le taux de base dépend du type de chaque vendeur (grossiste 3% / détail 10%).
       const bySellerBreakdown = [];
       for (const s of Object.values(bySeller)) {
@@ -591,16 +487,10 @@ async function start(){
       }
 
       const order = {
-        id: "o_" + crypto.randomUUID(),
+        id: "o_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
         items: orderItems,
-        subtotal,
-        deliveryFee,
         total,
         paymentMethod: paymentMethod || 'whatsapp',
-        customer: { name: String(customer?.name||'').trim(), phone: String(customer?.phone||'').trim() },
-        delivery: delivery && delivery.address ? { pickupZone:String(delivery.pickupZone||'').trim(), deliveryZone:String(delivery.deliveryZone||'').trim(), address:String(delivery.address).trim(), fee:deliveryFee, status:'en_attente_paiement' } : null,
-        events: [{type:'commande_creee',at:new Date().toISOString()}],
-        trackingToken: crypto.randomBytes(24).toString('hex'),
         bySeller: bySellerBreakdown,
         affiliateId: influencer ? influencer.id : null,
         affiliateCode: influencer ? influencer.code : null,
@@ -609,30 +499,11 @@ async function start(){
         createdAt: new Date().toISOString()
       };
       await orders.insertOne(order);
-      if(order.delivery){
-        await deliveries.insertOne({id:'d_'+crypto.randomUUID(),orderId:order.id,pickupZone:order.delivery.pickupZone,deliveryZone:order.delivery.deliveryZone,deliveryAddress:order.delivery.address,deliveryFee:deliveryFee,customerPhone:order.customer.phone,status:'en_attente_paiement',createdAt:order.createdAt});
-      }
-      res.json({ orderId: order.id, total: order.total, trackingToken: order.trackingToken });
+      res.json({ orderId: order.id, total: order.total });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "Erreur serveur lors de l'enregistrement de la commande." });
     }
-  });
-
-  app.get('/api/orders/track/:token', async(req,res)=>{
-    const order=await orders.findOne({trackingToken:req.params.token},{projection:{_id:0,customer:0}}); if(!order)return res.status(404).json({error:'Commande introuvable.'});
-    const review=await reviews.findOne({orderId:order.id},{projection:{_id:0}}); res.json({order,events:order.events||[],review:!!review});
-  });
-  app.post('/api/orders/:id/review',async(req,res)=>{
-    const token=String(req.body.trackingToken||''); const order=await orders.findOne({id:req.params.id,trackingToken:token}); if(!order)return res.status(404).json({error:'Commande introuvable.'});
-    if(order.delivery?.status!=='livree')return res.status(400).json({error:'Vous pourrez donner votre avis après la livraison.'});
-    const rating=Math.round(Number(req.body.rating)); if(rating<1||rating>5)return res.status(400).json({error:'Note invalide.'});
-    try{await reviews.insertOne({id:'r_'+crypto.randomUUID(),orderId:order.id,rating,comment:String(req.body.comment||'').slice(0,1000),createdAt:new Date().toISOString()});res.json({ok:true});}catch(e){if(e.code===11000)return res.status(409).json({error:'Un avis existe déjà pour cette commande.'});throw e;}
-  });
-  app.post('/api/support', rateLimit({windowMs:60_000,max:10}),async(req,res)=>{
-    const {orderId,trackingToken,category,message,phone}=req.body; if(!message||String(message).trim().length<5)return res.status(400).json({error:'Décrivez le problème.'});
-    if(orderId){const o=await orders.findOne({id:orderId,trackingToken});if(!o)return res.status(403).json({error:'Commande non autorisée.'});}
-    const ticketId='AMR-'+crypto.randomUUID().replace(/-/g,'').slice(0,10).toUpperCase(); await supportTickets.insertOne({ticketId,orderId:orderId||null,category:String(category||'autre'),message:String(message).slice(0,3000),phone:String(phone||'').slice(0,30),createdAt:new Date().toISOString(),status:'ouvert'});res.json({ok:true,ticketId});
   });
 
   // Un vendeur connecté voit ses propres commandes et ce qui lui est dû (90%).
@@ -672,7 +543,7 @@ async function start(){
     } catch { return false; }
   }
 
-  app.post('/api/paytech/request-payment', rateLimit({windowMs:60_000,max:10}), async (req, res) => {
+  app.post('/api/paytech/request-payment', async (req, res) => {
     try {
       if (!PAYTECH_API_KEY || !PAYTECH_API_SECRET) {
         return res.status(503).json({ error: "PayTech n'est pas encore configuré (clés API manquantes)." });
@@ -781,8 +652,7 @@ async function start(){
       if (!order) return res.status(200).send("IPN OK (commande introuvable, ignorée)");
 
       if (type_event === 'sale_complete') {
-        await orders.updateOne({ id: ref_command }, { $set: { paymentStatus: 'payee', 'delivery.status': 'a_attribuer' }, $push:{events:{type:'paiement_confirme',at:new Date().toISOString()}} });
-        await deliveries.updateOne({orderId:ref_command,status:'en_attente_paiement'},{$set:{status:'a_attribuer',paymentConfirmedAt:new Date().toISOString()}});
+        await orders.updateOne({ id: ref_command }, { $set: { paymentStatus: 'payee' } });
         // Virement automatique à chaque vendeur de la commande.
         for (const s of order.bySeller) {
           await payoutSeller(ref_command, s.sellerId);
@@ -832,7 +702,7 @@ async function start(){
   // du site continue de fonctionner normalement.
   const CAT_LABELS = { mode: "Mode & Vêtements", beaute: "Beauté & Bien-être", epicerie: "Épicerie & Alimentation", artisanat: "Artisanat & Maison", fournitures: "Fournitures", immobilier: "Immobilier" };
 
-  app.post('/api/assistant/chat', rateLimit({windowMs:60_000,max:30}), async (req, res) => {
+  app.post('/api/assistant/chat', async (req, res) => {
     try {
       if (!ANTHROPIC_API_KEY) {
         return res.status(503).json({ error: "L'assistant n'est pas encore activé sur ce site (clé API à configurer)." });

@@ -1,24 +1,39 @@
 <!DOCTYPE html>
 <!--
-  AVANT DE PUBLIER — à vérifier/remplacer :
-  1. og:url ci-dessous : remplacer par le vrai nom de domaine une fois le site hébergé.
-  2. Numéro WhatsApp (WHATSAPP_NUMBER) : confirmer qu'il s'agit bien du bon numéro.
-  Ce fichier doit être déployé avec amarita-backend.js et package.json
-  (voir ces fichiers) — les deux ensemble forment un seul site complet.
+  SEO Amarita : version optimisée pour l'indexation Google sur amarita.onrender.com.
+  Lors du passage à un domaine personnalisé, remplacer les URL canoniques/OG et le sitemap.
 -->
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Amarita — Le marché de tout</title>
-<meta name="description" content="Amarita, le marché en ligne de Dakar : mode, beauté, épicerie et artisanat. Prix fixes, paiement par WhatsApp, Wave ou Orange Money, livraison assurée par notre service client.">
+<title>Amarita — Marketplace sénégalaise | Achetez et vendez en ligne</title>
+<meta name="description" content="Amarita est une marketplace sénégalaise pour acheter et vendre en ligne : mode, beauté, épicerie, artisanat et autres produits, avec paiements adaptés au Sénégal et livraison.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="googlebot" content="index, follow">
+<link rel="canonical" href="https://amarita.onrender.com/">
 <meta name="theme-color" content="#2D1449">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="fr_FR">
-<meta property="og:title" content="Amarita — Le marché de tout">
-<meta property="og:description" content="Mode, beauté, épicerie, artisanat — le marché de Dakar livré chez vous.">
+<meta property="og:title" content="Amarita — Marketplace sénégalaise">
+<meta property="og:description" content="Achetez et vendez en ligne au Sénégal avec Amarita : produits, paiements et livraison.">
 <meta property="og:url" content="https://amarita.onrender.com">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8D%83%3C/text%3E%3C/svg%3E">
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org",
+  "@type":"OnlineStore",
+  "name":"Amarita",
+  "alternateName":"Amarita Marketplace",
+  "url":"https://amarita.onrender.com/",
+  "description":"Marketplace sénégalaise permettant d’acheter et de vendre en ligne, avec paiements adaptés au Sénégal et livraison.",
+  "areaServed":{
+    "@type":"Country",
+    "name":"Sénégal"
+  },
+  "sameAs":[]
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&family=Work+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script type="text/javascript" src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js" defer></script>
